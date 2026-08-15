@@ -103,4 +103,8 @@ class Config(context: Context) : BaseConfig(context) {
             ?: TimerMode.OFF
         set(timerMode) = prefs.edit().putInt(TIMER_MODE, timerMode.ordinal).apply()
 
+    var autoRenamePhoto: Boolean
+        get() = prefs.getBoolean(AUTO_RENAME_PHOTO, true)
+        set(autoRenamePhoto) = prefs.edit().putBoolean(AUTO_RENAME_PHOTO, autoRenamePhoto).apply()
+
 }

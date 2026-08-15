@@ -202,6 +202,21 @@
                 android:orientation="vertical">
 
                 <RelativeLayout
+                    android:id="@+id/settings_auto_rename_photo_holder"
+                    style="@style/SettingsHolderCheckboxStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <org.fossify.commons.views.MyMaterialSwitch
+                        android:id="@+id/settings_auto_rename_photo"
+                        style="@style/SettingsSwitchStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/auto_rename_photo" />
+
+                </RelativeLayout>
+
+                <RelativeLayout
                     android:id="@+id/settings_save_photo_metadata_holder"
                     style="@style/SettingsHolderCheckboxStyle"
                     android:layout_width="match_parent"

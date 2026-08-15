@@ -10,8 +10,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.provider.MediaStore
+import android.text.InputType
 import android.view.*
 import android.widget.LinearLayout
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.AppCompatEditText
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import androidx.core.view.*
@@ -69,6 +72,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     private var mLastHandledOrientation = 0
     private var countDownTimer: CountDownTimer? = null
     private var mOriginalBrightness: Float? = null
+    private val photoRenamer by lazy { PhotoRenamer(this) }
 
     private val tabSelectedListener = object : TabSelectedListener {
         override fun onTabSelected(tab: TabLayout.Tab) {
@@ -727,24 +731,87 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         binding.shutterAnimation.animate().alpha(0f).setDuration(ANIMATION_DURATION).start()
     }
 
-    override fun onMediaSaved(uri: Uri) {
+    override fun onMediaSaved(uri: Uri, isPhoto: Boolean) {
         binding.layoutTop.changeResolution.isEnabled = true
         loadLastTakenMedia(uri)
-        if (isImageCaptureIntent()) {
-            Intent().apply {
-                data = uri
-                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                setResult(RESULT_OK, this)
+        when {
+            isImageCaptureIntent() -> {
+                Intent().apply {
+                    data = uri
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    setResult(RESULT_OK, this)
+                }
+                finish()
             }
-            finish()
-        } else if (isVideoCaptureIntent()) {
-            Intent().apply {
-                data = uri
-                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                setResult(RESULT_OK, this)
+
+            isVideoCaptureIntent() -> {
+                Intent().apply {
+                    data = uri
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    setResult(RESULT_OK, this)
+                }
+                finish()
             }
-            finish()
+
+            isPhoto && config.autoRenamePhoto -> showRenamePhotoDialog(uri)
         }
+    }
+
+    private fun showRenamePhotoDialog(uri: Uri) {
+        if (isDestroyed || isFinishing) {
+            return
+        }
+
+        val currentName = photoRenamer.getDisplayName(uri) ?: return
+        val baseName = currentName.substringBeforeLast('.', currentName)
+
+        val input = AppCompatEditText(this).apply {
+            setText(baseName)
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            setTextColor(getProperTextColor())
+            setSelectAllOnFocus(true)
+            selectAll()
+        }
+
+        getAlertDialogBuilder()
+            .setPositiveButton(org.fossify.commons.R.string.ok, null)
+            .setNegativeButton(org.fossify.commons.R.string.cancel, null)
+            .apply {
+                setupDialogStuff(input, this, titleId = R.string.rename_photo_title) { dialog ->
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val newBase = sanitizeFileName(input.text.toString())
+                        if (newBase.isEmpty() || newBase == baseName) {
+                            dialog.dismiss()
+                            return@setOnClickListener
+                        }
+
+                        val newUri = photoRenamer.renamePhoto(uri, newBase)
+                        if (newUri != null) {
+                            mPreviewUri = newUri
+                            loadLastTakenMedia(newUri)
+                        } else {
+                            toast(R.string.rename_photo_failed)
+                        }
+                        dialog.dismiss()
+                    }
+
+                    input.post {
+                        // Force the keyboard up and keep the preset name fully selected so a
+                        // single backspace clears it for immediate retyping.
+                        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+                        input.requestFocus()
+                        input.selectAll()
+                    }
+                }
+            }
+    }
+
+    private fun sanitizeFileName(name: String): String {
+        val forbidden = charArrayOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')
+        return name.trim().map { char ->
+            if (char in forbidden || char.isISOControl()) '_' else char
+        }.joinToString("")
     }
 
     override fun onImageCaptured(bitmap: Bitmap) {

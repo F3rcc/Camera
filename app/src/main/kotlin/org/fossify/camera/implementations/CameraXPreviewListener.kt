@@ -12,7 +12,7 @@ interface CameraXPreviewListener {
     fun setFlashAvailable(available: Boolean)
     fun onChangeCamera(frontCamera: Boolean) {}
     fun shutterAnimation()
-    fun onMediaSaved(uri: Uri)
+    fun onMediaSaved(uri: Uri, isPhoto: Boolean)
     fun onImageCaptured(bitmap: Bitmap)
     fun onChangeFlashMode(flashMode: Int)
     fun onPhotoCaptureStart()

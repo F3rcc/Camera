@@ -47,6 +47,7 @@ class SettingsActivity : SimpleActivity() {
         setupSavePhotosFolder()
         setupPhotoQuality()
         setupCaptureMode()
+        setupAutoRenamePhoto()
         updateTextColors(binding.settingsHolder)
 
         val properPrimaryColor = getProperPrimaryColor()
@@ -286,5 +287,13 @@ class SettingsActivity : SimpleActivity() {
 
     private fun updateCaptureMode(captureMode: CaptureMode) {
         binding.settingsCaptureMode.text = getString(captureMode.stringResId)
+    }
+
+    private fun setupAutoRenamePhoto() = binding.apply {
+        settingsAutoRenamePhoto.isChecked = config.autoRenamePhoto
+        settingsAutoRenamePhotoHolder.setOnClickListener {
+            settingsAutoRenamePhoto.toggle()
+            config.autoRenamePhoto = settingsAutoRenamePhoto.isChecked
+        }
     }
 }

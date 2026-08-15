@@ -619,7 +619,7 @@ class CameraXPreview(
                                 onImageSaved = { savedUri ->
                                     activity.runOnUiThread {
                                         listener.onPhotoCaptureEnd()
-                                        listener.onMediaSaved(savedUri)
+                                        listener.onMediaSaved(savedUri, isPhoto = true)
                                     }
                                 },
                                 onError = ::handleImageCaptureError
@@ -730,7 +730,7 @@ class CameraXPreview(
                         if (recordEvent.hasError()) {
                             cameraErrorHandler.handleVideoRecordingError(recordEvent.error)
                         } else {
-                            listener.onMediaSaved(recordEvent.outputResults.outputUri)
+                            listener.onMediaSaved(recordEvent.outputResults.outputUri, isPhoto = false)
                         }
                     }
                 }

@@ -23,6 +23,7 @@ const val PHOTO_QUALITY = "photo_quality"
 const val CAPTURE_MODE = "capture_mode"
 const val TIMER_MODE = "timer_mode"
 const val MAX_BRIGHTNESS = "max_brightness"
+const val AUTO_RENAME_PHOTO = "auto_rename_photo"
 
 const val FLASH_OFF = 0
 const val FLASH_ON = 1

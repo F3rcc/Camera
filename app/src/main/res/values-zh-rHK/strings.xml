@@ -45,4 +45,7 @@
     <string name="save_photo_video_location">儲存照片和影片位置</string>
     <string name="photo_compression_quality">相片壓縮品質</string>
     <string name="shutter">快門</string>
+    <string name="auto_rename_photo">拍照後重新命名照片</string>
+    <string name="rename_photo_title">重新命名照片</string>
+    <string name="rename_photo_failed">重新命名失敗</string>
 </resources>

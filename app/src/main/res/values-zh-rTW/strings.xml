@@ -46,4 +46,7 @@
     <string name="save_photo_video_location">儲存照片和影片位置</string>
     <string name="toggle_photo_video">切換照片/影片模式</string>
     <string name="max_brightness">預覽時將螢幕亮度調整至最亮</string>
+    <string name="auto_rename_photo">拍照後重新命名照片</string>
+    <string name="rename_photo_title">重新命名照片</string>
+    <string name="rename_photo_failed">重新命名失敗</string>
 </resources>

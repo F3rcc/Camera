@@ -46,4 +46,7 @@
     <string name="photo_compression_quality">照片压缩品质</string>
     <string name="shutter">快门</string>
     <string name="max_brightness">预览时的最大屏幕亮度</string>
+    <string name="auto_rename_photo">拍照后重命名照片</string>
+    <string name="rename_photo_title">重命名照片</string>
+    <string name="rename_photo_failed">重命名失败</string>
 </resources>
