@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Option to automatically rename a photo right after capture (toggleable in settings)
 
 ## [1.5.0] - 2026-01-30
 ### Added
