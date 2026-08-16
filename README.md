@@ -22,6 +22,11 @@ Personalize every aspect of your camera experience. Adjust the output quality, c
 path, and set the resolution to suit your needs. You can even customize colors and themes to match
 your style.
 
+**✏️ AUTO RENAME AFTER CAPTURE:**  
+Rename each photo the moment you take it — a rename dialog pops up with the preset filename
+pre-selected and the keyboard ready, so you can type a new name or dismiss it to keep the default.
+The feature can be toggled on or off anytime in Settings.
+
 **⚡ DYNAMIC CONTROLS:**  
 Toggle settings with ease—control flash, aspect ratio, and zoom directly from the camera view. The
 app is designed for quick access, letting you capture moments efficiently, with intuitive controls.
