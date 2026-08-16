@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.hardware.SensorManager
 import android.net.Uri
 import android.os.Bundle
@@ -769,7 +770,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             setText(baseName)
             isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-            setTextColor(getProperTextColor())
+            setTextColor(getInputTextColor())
             setSelectAllOnFocus(true)
             selectAll()
         }
@@ -812,6 +813,17 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         return name.trim().map { char ->
             if (char in forbidden || char.isISOControl()) '_' else char
         }.joinToString("")
+    }
+
+    // Pick a readable input text color based on the actual dialog background, so it stays
+    // legible regardless of the system light/dark mode.
+    private fun getInputTextColor(): Int {
+        return if (isColorDark(getProperBackgroundColor())) Color.WHITE else Color.BLACK
+    }
+
+    private fun isColorDark(color: Int): Boolean {
+        val luminance = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) / 255
+        return luminance < 0.5
     }
 
     override fun onImageCaptured(bitmap: Bitmap) {
