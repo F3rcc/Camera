@@ -14,6 +14,7 @@ import android.provider.MediaStore
 import android.text.InputType
 import android.view.*
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.constraintlayout.widget.ConstraintSet
@@ -56,6 +57,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         private const val MIN_SWIPE_DISTANCE_X = 100
         private const val TIMER_2_SECONDS = 2001
         private const val SWITCH_CAMERA_ROTATION_ANGLE = 180f
+        private val RENAME_DIALOG_BACKGROUND_COLOR = 0xFF2A292F.toInt()
     }
 
     private val binding by viewBinding(ActivityMainBinding::inflate)
@@ -770,7 +772,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             setText(baseName)
             isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-            setTextColor(getInputTextColor())
+            setTextColor(Color.WHITE)
             setSelectAllOnFocus(true)
             selectAll()
         }
@@ -780,6 +782,16 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             .setNegativeButton(org.fossify.commons.R.string.cancel, null)
             .apply {
                 setupDialogStuff(input, this, titleId = R.string.rename_photo_title) { dialog ->
+                    // Fixed dialog styling: same dark background and white text on every device.
+                    dialog.window?.setBackgroundDrawable(
+                        resources.getColoredDrawableWithColor(
+                            org.fossify.commons.R.drawable.dialog_bg,
+                            RENAME_DIALOG_BACKGROUND_COLOR
+                        )
+                    )
+                    dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(Color.WHITE)
+                    dialog.findViewById<TextView>(org.fossify.commons.R.id.dialog_title_textview)?.setTextColor(Color.WHITE)
+
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                         val newBase = sanitizeFileName(input.text.toString())
                         if (newBase.isEmpty() || newBase == baseName) {
@@ -813,17 +825,6 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         return name.trim().map { char ->
             if (char in forbidden || char.isISOControl()) '_' else char
         }.joinToString("")
-    }
-
-    // Pick a readable input text color based on the actual dialog background, so it stays
-    // legible regardless of the system light/dark mode.
-    private fun getInputTextColor(): Int {
-        return if (isColorDark(getProperBackgroundColor())) Color.WHITE else Color.BLACK
-    }
-
-    private fun isColorDark(color: Int): Boolean {
-        val luminance = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) / 255
-        return luminance < 0.5
     }
 
     override fun onImageCaptured(bitmap: Bitmap) {
