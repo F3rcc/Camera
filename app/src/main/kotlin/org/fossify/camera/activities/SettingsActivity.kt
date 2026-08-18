@@ -261,10 +261,7 @@ class SettingsActivity : SimpleActivity() {
 
             container.addView(item.root)
             switches.add(item.locationSwitch)
-
-            if (index < 5) {
-                container.addView(createDashedDivider())
-            }
+            container.addView(createDashedDivider())
         }
 
         refreshLocationSwitchStates(switches)
