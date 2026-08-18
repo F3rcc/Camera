@@ -17,6 +17,6 @@ class HelpActivity : SimpleActivity() {
         setupTopAppBar(binding.helpAppbar, NavigationIcon.Arrow)
         binding.helpText.text =
             resources.openRawResource(R.raw.help).bufferedReader().use { it.readText() }
-        updateTextColors(binding.helpText)
+        binding.helpText.setTextColor(getProperTextColor())
     }
 }
