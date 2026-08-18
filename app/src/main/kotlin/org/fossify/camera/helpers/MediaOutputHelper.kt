@@ -27,6 +27,7 @@ import org.fossify.commons.extensions.hasProperStoredTreeUri
 import org.fossify.commons.extensions.isAccessibleWithSAFSdk30
 import org.fossify.commons.extensions.isRestrictedSAFOnlyRoot
 import org.fossify.commons.extensions.needsStupidWritePermissions
+import org.fossify.commons.extensions.rescanPath
 import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.helpers.isOreoPlus
 import org.fossify.commons.helpers.isQPlus
@@ -257,5 +258,91 @@ class MediaOutputHelper(
 
             else -> return Uri.fromFile(targetFile)
         }
+    }
+
+    /**
+     * Copies an already-saved media file (identified by [sourceUri]) into [folder] under
+     * [fileName], auto-deduplicating the name to avoid overwriting an existing file.
+     * Returns the destination Uri, or null on failure.
+     */
+    fun copyMediaToFolder(sourceUri: Uri, folder: String, fileName: String, isPhoto: Boolean): Uri? {
+        return try {
+            val mimeType = if (isPhoto) IMAGE_MIME_TYPE else VIDEO_MIME_TYPE
+            if (canWriteToFilePath(folder)) {
+                val uniqueName = resolveUniqueName(folder, fileName)
+                val targetPath = "$folder/$uniqueName"
+                val uri = getUriForFilePath(targetPath)
+                val outputStream = activity.getFileOutputStreamSync(targetPath, mimeType)
+                if (uri != null && outputStream != null) {
+                    if (copyStream(sourceUri, outputStream)) {
+                        activity.rescanPath(targetPath)
+                        uri
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+            } else {
+                copyToMediaStore(sourceUri, folder, fileName, isPhoto)
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun deleteMedia(uri: Uri): Boolean {
+        return try {
+            when {
+                uri.scheme == "file" -> File(uri.path ?: return false).delete()
+                uri.authority == "media" -> contentResolver.delete(uri, null, null) > 0
+                else -> DocumentsContract.deleteDocument(contentResolver, uri)
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun copyToMediaStore(sourceUri: Uri, folder: String, fileName: String, isPhoto: Boolean): Uri? {
+        val mimeType = if (isPhoto) IMAGE_MIME_TYPE else VIDEO_MIME_TYPE
+        val relativePath = folder
+            .removePrefix(Environment.getExternalStorageDirectory().absolutePath)
+            .trimStart('/')
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+        }
+        val collection = if (isPhoto) {
+            MediaStore.Images.Media.getContentUri(EXTERNAL_VOLUME)
+        } else {
+            MediaStore.Video.Media.getContentUri(EXTERNAL_VOLUME)
+        }
+        val uri = contentResolver.insert(collection, values) ?: return null
+        val outputStream = contentResolver.openOutputStream(uri) ?: return null
+        return if (copyStream(sourceUri, outputStream)) uri else null
+    }
+
+    private fun copyStream(sourceUri: Uri, outputStream: OutputStream): Boolean {
+        val input = contentResolver.openInputStream(sourceUri) ?: return false
+        return try {
+            input.use { it.copyTo(outputStream) }
+            true
+        } finally {
+            outputStream.close()
+        }
+    }
+
+    private fun resolveUniqueName(folder: String, fileName: String): String {
+        val dot = fileName.lastIndexOf('.')
+        val base = if (dot > 0) fileName.substring(0, dot) else fileName
+        val ext = if (dot > 0) fileName.substring(dot) else ""
+        var candidate = fileName
+        var i = 1
+        while (activity.getDoesFilePathExist("$folder/$candidate")) {
+            candidate = "$base ($i)$ext"
+            i++
+        }
+        return candidate
     }
 }

@@ -76,6 +76,7 @@ import org.fossify.camera.helpers.FLASH_ON
 import org.fossify.camera.helpers.ImageQualityManager
 import org.fossify.camera.helpers.ImageSaver
 import org.fossify.camera.helpers.ImageUtil
+import org.fossify.camera.helpers.MediaDistributor
 import org.fossify.camera.helpers.MediaOutputHelper
 import org.fossify.camera.helpers.MediaSizeStore
 import org.fossify.camera.helpers.MediaSoundHelper
@@ -120,6 +121,7 @@ class CameraXPreview(
     private val videoQualityManager = VideoQualityManager(activity)
     private val imageQualityManager = ImageQualityManager(activity)
     private val mediaSizeStore = MediaSizeStore(config)
+    private val mediaDistributor by lazy { MediaDistributor(activity, mediaOutputHelper) }
 
     private val orientationEventListener =
         object : OrientationEventListener(activity, SensorManager.SENSOR_DELAY_NORMAL) {
@@ -658,6 +660,16 @@ class CameraXPreview(
             cameraHandler.postDelayed(cameraModeRunnable, CAMERA_MODE_SWITCH_WAIT_TIME)
         }
         lastCameraStartTime = currentTime
+    }
+
+    override fun distributeMedia(
+        sourceUri: Uri,
+        newBaseName: String,
+        targetIndexes: List<Int>,
+        isPhoto: Boolean,
+        onDone: (MediaDistributor.DistributionResult) -> Unit,
+    ) {
+        mediaDistributor.distribute(sourceUri, newBaseName, targetIndexes, isPhoto, onDone)
     }
 
     override fun toggleRecording() {

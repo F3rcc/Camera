@@ -1,5 +1,8 @@
 package org.fossify.camera.interfaces
 
+import android.net.Uri
+import org.fossify.camera.helpers.MediaDistributor
+
 interface MyPreview {
 
     fun isInPhotoMode(): Boolean
@@ -19,4 +22,12 @@ interface MyPreview {
     fun initVideoMode()
 
     fun showChangeResolution()
+
+    fun distributeMedia(
+        sourceUri: Uri,
+        newBaseName: String,
+        targetIndexes: List<Int>,
+        isPhoto: Boolean,
+        onDone: (MediaDistributor.DistributionResult) -> Unit,
+    )
 }

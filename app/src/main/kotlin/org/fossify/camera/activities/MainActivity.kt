@@ -2,6 +2,7 @@ package org.fossify.camera.activities
 
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
+import android.app.ProgressDialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
@@ -12,10 +13,12 @@ import android.os.Bundle
 import android.os.CountDownTimer
 import android.provider.MediaStore
 import android.text.InputType
+import android.text.TextUtils
 import android.view.*
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.AppCompatCheckBox
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
@@ -35,6 +38,8 @@ import org.fossify.camera.databinding.ActivityMainBinding
 import org.fossify.camera.extensions.config
 import org.fossify.camera.extensions.fadeIn
 import org.fossify.camera.extensions.fadeOut
+import org.fossify.camera.extensions.getLastFolderName
+import org.fossify.camera.extensions.getLastTwoFolderNames
 import org.fossify.camera.extensions.setShadowIcon
 import org.fossify.camera.extensions.toFlashModeId
 import org.fossify.camera.helpers.*
@@ -756,17 +761,35 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                 finish()
             }
 
-            isPhoto && config.autoRenamePhoto -> showRenamePhotoDialog(uri)
+            config.autoRenamePhoto -> showRenamePhotoDialog(uri, isPhoto)
         }
     }
 
-    private fun showRenamePhotoDialog(uri: Uri) {
+    private fun showRenamePhotoDialog(uri: Uri, isPhoto: Boolean) {
         if (isDestroyed || isFinishing) {
             return
         }
 
         val currentName = photoRenamer.getDisplayName(uri) ?: return
         val baseName = currentName.substringBeforeLast('.', currentName)
+
+        val available = (1..5).filter {
+            config.getLocationEnabled(it) && config.getLocationPath(it).isNotEmpty()
+        }
+        if (available.isEmpty()) {
+            return
+        }
+
+        val remembered = if (isPhoto) config.lastSelectedPhotoLocations else config.lastSelectedVideoLocations
+        var preChecked = remembered.intersect(available.toSet())
+        if (preChecked.isEmpty()) {
+            preChecked = if (1 in available) setOf(1) else available.take(1).toSet()
+        }
+        if (!isPhoto && preChecked.size > 2) {
+            preChecked = preChecked.take(2).toSet()
+        }
+        val selected = preChecked.toMutableSet()
+        val twoLevel = config.dialogShowTwoLevelPath
 
         val input = AppCompatEditText(this).apply {
             setText(baseName)
@@ -777,12 +800,60 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             selectAll()
         }
 
+        val density = resources.displayMetrics.density
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * density).toInt(), 0, (16 * density).toInt(), 0)
+        }
+
+        container.addView(TextView(this).apply {
+            text = getString(R.string.save_location_dialog_title)
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setPadding(0, 0, 0, (8 * density).toInt())
+        })
+
+        available.forEach { index ->
+            container.addView(AppCompatCheckBox(this).apply {
+                val path = config.getLocationPath(index)
+                val folderDisplay = if (twoLevel) path.getLastTwoFolderNames() else path.getLastFolderName()
+                text = "${getString(R.string.location_index, index)} ($folderDisplay)"
+                isChecked = index in selected
+                setSingleLine()
+                ellipsize = TextUtils.TruncateAt.START
+                setTextColor(Color.WHITE)
+                buttonTintList = ColorStateList.valueOf(getProperPrimaryColor())
+                setOnLongClickListener {
+                    toast(path)
+                    true
+                }
+                setOnClickListener {
+                    if (isChecked) {
+                        if (!isPhoto && selected.size >= 2) {
+                            isChecked = false
+                        } else {
+                            selected.add(index)
+                        }
+                    } else {
+                        if (selected.size <= 1) {
+                            isChecked = true
+                        } else {
+                            selected.remove(index)
+                        }
+                    }
+                }
+            })
+        }
+
+        container.addView(input)
+
+        val titleId = if (isPhoto) R.string.rename_photo_title else R.string.rename_video_title
+
         getAlertDialogBuilder()
             .setPositiveButton(org.fossify.commons.R.string.ok, null)
             .setNegativeButton(org.fossify.commons.R.string.cancel, null)
             .apply {
-                setupDialogStuff(input, this, titleId = R.string.rename_photo_title) { dialog ->
-                    // Fixed dialog styling: same dark background and white text on every device.
+                setupDialogStuff(container, this, titleId = titleId) { dialog ->
                     dialog.window?.setBackgroundDrawable(
                         resources.getColoredDrawableWithColor(
                             org.fossify.commons.R.drawable.dialog_bg,
@@ -794,24 +865,42 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
 
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                         val newBase = sanitizeFileName(input.text.toString())
-                        if (newBase.isEmpty() || newBase == baseName) {
-                            dialog.dismiss()
+                        if (newBase.isEmpty()) {
                             return@setOnClickListener
                         }
 
-                        val newUri = photoRenamer.renamePhoto(uri, newBase)
-                        if (newUri != null) {
-                            mPreviewUri = newUri
-                            loadLastTakenMedia(newUri)
+                        val targets = selected.toList()
+                        if (isPhoto) {
+                            config.lastSelectedPhotoLocations = selected
                         } else {
-                            toast(R.string.rename_photo_failed)
+                            config.lastSelectedVideoLocations = selected
                         }
                         dialog.dismiss()
+
+                        // 名字没变且只保存到位置1：无需分发
+                        if (newBase == baseName && targets == listOf(1)) {
+                            return@setOnClickListener
+                        }
+
+                        val progress = ProgressDialog(this@MainActivity).apply {
+                            setMessage(getString(R.string.saving_progress))
+                            setCancelable(false)
+                            show()
+                        }
+
+                        mPreview?.distributeMedia(uri, newBase, targets, isPhoto) { result ->
+                            progress.dismiss()
+                            result.failedIndexes.forEach { index ->
+                                toast(getString(R.string.location_save_failed, index))
+                            }
+                            result.savedUris.firstOrNull()?.let {
+                                mPreviewUri = it
+                                loadLastTakenMedia(it)
+                            }
+                        }
                     }
 
                     input.post {
-                        // Force the keyboard up and keep the preset name fully selected so a
-                        // single backspace clears it for immediate retyping.
                         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
                         input.requestFocus()
                         input.selectAll()
