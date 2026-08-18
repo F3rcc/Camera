@@ -1,6 +1,7 @@
 package org.fossify.camera.activities
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.text.SpannableString
@@ -58,6 +59,7 @@ class SettingsActivity : SimpleActivity() {
         setupPhotoQuality()
         setupCaptureMode()
         setupAutoRenamePhoto()
+        setupUsageInstructions()
         updateTextColors(binding.settingsHolder)
 
         val properPrimaryColor = getProperPrimaryColor()
@@ -388,6 +390,12 @@ class SettingsActivity : SimpleActivity() {
         settingsAutoRenamePhotoHolder.setOnClickListener {
             settingsAutoRenamePhoto.toggle()
             config.autoRenamePhoto = settingsAutoRenamePhoto.isChecked
+        }
+    }
+
+    private fun setupUsageInstructions() = binding.apply {
+        settingsUsageInstructionsHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, HelpActivity::class.java))
         }
     }
 }

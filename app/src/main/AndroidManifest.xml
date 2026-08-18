@@ -114,6 +114,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".activities.HelpActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="false"
+            android:label="@string/usage_instructions"
+            android:parentActivityName=".activities.SettingsActivity" />
+
         <receiver
             android:name=".receivers.HardwareShutterReceiver"
             android:exported="false">

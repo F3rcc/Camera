@@ -1,0 +1,32 @@
+Usage Instructions
+
+1. Multi-location save
+This app can save your photos/videos to up to 5 custom locations (Location 1 ~ Location 5). In Settings -> Save locations, you can enable each location and choose its folder.
+
+2. Location 1 (fixed staging folder)
+Location 1 is the fixed staging folder: each photo/video is first saved to Location 1, then distributed to the locations you check in the rename dialog.
+- Location 1 is enabled by default with the DCIM folder; its path can be changed but never left empty.
+- Location 2 ~ 5 are disabled by default. Enable them and choose a folder before they appear in the dialog.
+
+3. Save rules (at least one enabled)
+- At least one of Location 1 ~ 5 must stay enabled. When only one remains, its switch is greyed out and cannot be turned off.
+- Once a folder is chosen for Location 2 ~ 5, it is kept even if you disable the switch; re-enabling shows the same folder.
+
+4. Rename dialog after capture
+A rename dialog pops up right after each photo/video is captured:
+1. Check the location(s) to save to (multiple allowed).
+2. Type a new filename (pre-filled with IMG_/VID_ timestamp and fully selected).
+3. Tap OK (or press the keyboard Enter key) to save, or Cancel to keep it in Location 1 with the default name.
+
+5. Selection limits
+- Photo: up to 5 locations at once.
+- Video: up to 2 locations at once (videos are large).
+
+6. Memory
+The dialog remembers your last checked locations and pre-checks them next time (photo and video are remembered separately).
+
+7. Auto de-duplication
+If a file with the same name already exists in a target location, the app appends " (1)", " (2)"... to avoid overwriting.
+
+8. Failure handling
+If a location fails to save, it is skipped with a notice; other successful locations are saved normally. If everything succeeds, you return to the camera without any notice.

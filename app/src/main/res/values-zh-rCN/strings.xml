@@ -58,4 +58,5 @@
     <string name="save_location_dialog_title">保存位置</string>
     <string name="saving_progress">保存中…</string>
     <string name="location_save_failed">第 %d 个位置保存失败</string>
+    <string name="usage_instructions">使用说明</string>
 </resources>
