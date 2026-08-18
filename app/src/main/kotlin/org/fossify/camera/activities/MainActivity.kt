@@ -15,6 +15,7 @@ import android.provider.MediaStore
 import android.text.InputType
 import android.text.TextUtils
 import android.view.*
+import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -795,6 +796,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             setText(baseName)
             isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            imeOptions = EditorInfo.IME_ACTION_DONE
             setTextColor(Color.WHITE)
             setSelectAllOnFocus(true)
             selectAll()
@@ -863,12 +865,11 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                     dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(Color.WHITE)
                     dialog.findViewById<TextView>(org.fossify.commons.R.id.dialog_title_textview)?.setTextColor(Color.WHITE)
 
-                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    fun confirm() {
                         val newBase = sanitizeFileName(input.text.toString())
                         if (newBase.isEmpty()) {
-                            return@setOnClickListener
+                            return
                         }
-
                         val targets = selected.toList()
                         if (isPhoto) {
                             config.lastSelectedPhotoLocations = selected
@@ -879,7 +880,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
 
                         // 名字没变且只保存到位置1：无需分发
                         if (newBase == baseName && targets == listOf(1)) {
-                            return@setOnClickListener
+                            return
                         }
 
                         val progress = ProgressDialog(this@MainActivity).apply {
@@ -897,6 +898,16 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                                 mPreviewUri = it
                                 loadLastTakenMedia(it)
                             }
+                        }
+                    }
+
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { confirm() }
+                    input.setOnEditorActionListener { _, actionId, _ ->
+                        if (actionId == EditorInfo.IME_ACTION_DONE) {
+                            confirm()
+                            true
+                        } else {
+                            false
                         }
                     }
 

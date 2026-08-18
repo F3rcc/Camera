@@ -261,6 +261,10 @@
 
                 </RelativeLayout>
 
+                <include
+                    android:id="@+id/settings_save_locations_divider"
+                    layout="@layout/divider" />
+
                 <TextView
                     android:id="@+id/settings_save_locations_label"
                     style="@style/SettingsSectionLabelStyle"

@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
+import android.view.View
+import android.widget.LinearLayout
 import org.fossify.camera.BuildConfig
 import org.fossify.camera.R
 import org.fossify.camera.databinding.ActivitySettingsBinding
@@ -256,6 +258,10 @@ class SettingsActivity : SimpleActivity() {
 
             container.addView(item.root)
             switches.add(item.locationSwitch)
+
+            if (index < 5) {
+                container.addView(createDashedDivider())
+            }
         }
 
         refreshLocationSwitchStates(switches)
@@ -277,6 +283,16 @@ class SettingsActivity : SimpleActivity() {
     private fun getLocationPathDisplay(index: Int): String {
         val path = config.getLocationPath(index)
         return if (path.isEmpty()) "" else path.getLastTwoFolderNames()
+    }
+
+    private fun createDashedDivider(): View {
+        return View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (1 * resources.displayMetrics.density).toInt()
+            )
+            setBackgroundResource(R.drawable.dashed_divider)
+        }
     }
 
     private fun pickLocationPath(index: Int, callback: (String) -> Unit) {
