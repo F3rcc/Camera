@@ -17,6 +17,7 @@ import org.fossify.camera.extensions.checkLocationPermission
 import org.fossify.camera.extensions.config
 import org.fossify.camera.extensions.getLastTwoFolderNames
 import org.fossify.camera.models.CaptureMode
+import org.fossify.camera.views.DashedDividerDrawable
 import org.fossify.commons.dialogs.*
 import org.fossify.commons.extensions.*
 import org.fossify.commons.helpers.*
@@ -288,12 +289,18 @@ class SettingsActivity : SimpleActivity() {
     }
 
     private fun createDashedDivider(): View {
+        val density = resources.displayMetrics.density
         return View(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (1 * resources.displayMetrics.density).toInt()
+                (1 * density).toInt()
             )
-            setBackgroundResource(R.drawable.dashed_divider)
+            background = DashedDividerDrawable(
+                color = 0xFF777777.toInt(),
+                strokeWidthPx = density,
+                dashWidthPx = 4 * density,
+                dashGapPx = 3 * density,
+            )
         }
     }
 
