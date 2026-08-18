@@ -27,6 +27,11 @@ Rename each photo the moment you take it — a rename dialog pops up with the pr
 pre-selected and the keyboard ready, so you can type a new name or dismiss it to keep the default.
 The feature can be toggled on or off anytime in Settings.
 
+**🗂️ MULTI-LOCATION SAVE:**  
+Save each photo or video to one or more of up to 5 configurable locations. The rename dialog lets
+you pick the destination(s) on the spot, remembers your last choice, and auto-deduplicates
+filenames so nothing gets overwritten.
+
 **⚡ DYNAMIC CONTROLS:**  
 Toggle settings with ease—control flash, aspect ratio, and zoom directly from the camera view. The
 app is designed for quick access, letting you capture moments efficiently, with intuitive controls.

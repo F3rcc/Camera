@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-08-18
+### Added
+- Multi-location save: save each photo/video to one or more of up to 5 configurable locations
+- Rename dialog with location multi-select, memory of last selection, and IME enter to confirm
+- Auto de-duplication of filenames to avoid overwriting
+- In-app usage instructions (multi-language)
+
 ## [1.6.0] - 2026-08-16
 ### Added
 - Option to automatically rename a photo right after capture (toggleable in settings)
