@@ -49,4 +49,13 @@
     <string name="auto_rename_photo">拍照后重命名照片</string>
     <string name="rename_photo_title">重命名照片</string>
     <string name="rename_photo_failed">重命名失败</string>
+    <string name="rename_video_title">重命名视频</string>
+    <string name="save_locations_section">保存位置</string>
+    <string name="location_index">位置%d</string>
+    <string name="location_staging_note">（固定的暂存目录）</string>
+    <string name="save_path">保存路径</string>
+    <string name="dialog_show_two_level_path">弹窗显示两级路径</string>
+    <string name="save_location_dialog_title">保存位置</string>
+    <string name="saving_progress">保存中…</string>
+    <string name="location_save_failed">第 %d 个位置保存失败</string>
 </resources>

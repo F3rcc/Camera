@@ -1,18 +1,25 @@
 package org.fossify.camera.activities
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import org.fossify.camera.BuildConfig
 import org.fossify.camera.R
 import org.fossify.camera.databinding.ActivitySettingsBinding
+import org.fossify.camera.databinding.LayoutSaveLocationBinding
 import org.fossify.camera.extensions.checkLocationPermission
 import org.fossify.camera.extensions.config
+import org.fossify.camera.extensions.getLastTwoFolderNames
 import org.fossify.camera.models.CaptureMode
 import org.fossify.commons.dialogs.*
 import org.fossify.commons.extensions.*
 import org.fossify.commons.helpers.*
 import org.fossify.commons.models.FAQItem
 import org.fossify.commons.models.RadioItem
+import org.fossify.commons.views.MyMaterialSwitch
 import java.util.*
 import kotlin.system.exitProcess
 
@@ -44,7 +51,8 @@ class SettingsActivity : SimpleActivity() {
         setupFlipPhotos()
         setupSavePhotoMetadata()
         setupSavePhotoVideoLocation()
-        setupSavePhotosFolder()
+        setupSaveLocations()
+        setupDialogShowTwoLevelPath()
         setupPhotoQuality()
         setupCaptureMode()
         setupAutoRenamePhoto()
@@ -57,6 +65,7 @@ class SettingsActivity : SimpleActivity() {
                 settingsGeneralSettingsLabel,
                 settingsCameraLabel,
                 settingsSavingLabel,
+                settingsSaveLocationsLabel,
             ).forEach {
                 it.setTextColor(properPrimaryColor)
             }
@@ -217,28 +226,97 @@ class SettingsActivity : SimpleActivity() {
         config.savePhotoVideoLocation = enabled
     }
 
-    private fun setupSavePhotosFolder() = binding.apply {
-        settingsSavePhotosLabel.text = addLockedLabelIfNeeded(R.string.save_photos)
-        settingsSavePhotos.text = getLastPart(config.savePhotosFolder)
-        settingsSavePhotosHolder.setOnClickListener {
-            if (isOrWasThankYouInstalled()) {
-                FilePickerDialog(
-                    this@SettingsActivity,
-                    config.savePhotosFolder,
-                    false,
-                    showFAB = true
-                ) {
-                    val path = it
-                    handleSAFDialog(it) { success ->
-                        if (success) {
-                            config.savePhotosFolder = path
-                            settingsSavePhotos.text = getLastPart(config.savePhotosFolder)
-                        }
+    private fun setupSaveLocations() {
+        val container = binding.settingsSaveLocationsContainer
+        container.removeAllViews()
+        val switches = mutableListOf<MyMaterialSwitch>()
+
+        for (index in 1..5) {
+            val item = LayoutSaveLocationBinding.inflate(layoutInflater, container, false)
+            val title = getString(R.string.location_index, index)
+            item.locationSwitch.text = if (index == 1) buildStagingTitle(title) else title
+            item.locationSwitch.isChecked = config.getLocationEnabled(index)
+            item.locationPathValue.text = getLocationPathDisplay(index)
+
+            item.locationSwitchHolder.setOnClickListener {
+                if (!item.locationSwitch.isEnabled) {
+                    return@setOnClickListener
+                }
+                item.locationSwitch.toggle()
+                config.setLocationEnabled(index, item.locationSwitch.isChecked)
+                refreshLocationSwitchStates(switches)
+            }
+
+            item.locationPathHolder.setOnClickListener {
+                pickLocationPath(index) { path ->
+                    config.setLocationPath(index, path)
+                    item.locationPathValue.text = getLocationPathDisplay(index)
+                }
+            }
+
+            container.addView(item.root)
+            switches.add(item.locationSwitch)
+        }
+
+        refreshLocationSwitchStates(switches)
+    }
+
+    private fun buildStagingTitle(title: String): CharSequence {
+        val note = getString(R.string.location_staging_note)
+        val full = title + note
+        return SpannableString(full).apply {
+            setSpan(
+                ForegroundColorSpan(Color.GRAY),
+                title.length,
+                full.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+    }
+
+    private fun getLocationPathDisplay(index: Int): String {
+        val path = config.getLocationPath(index)
+        return if (path.isEmpty()) "" else path.getLastTwoFolderNames()
+    }
+
+    private fun pickLocationPath(index: Int, callback: (String) -> Unit) {
+        val current = config.getLocationPath(index)
+        val initial = if (current.isEmpty()) config.savePhotosFolder else current
+        if (isOrWasThankYouInstalled()) {
+            FilePickerDialog(this@SettingsActivity, initial, false, showFAB = true) { path ->
+                handleSAFDialog(path) { success ->
+                    if (success) {
+                        callback(path)
                     }
                 }
-            } else {
-                FeatureLockedDialog(this@SettingsActivity) { }
             }
+        } else {
+            FeatureLockedDialog(this@SettingsActivity) { }
+        }
+    }
+
+    private fun refreshLocationSwitchStates(switches: List<MyMaterialSwitch>) {
+        val enabledIndexes = (1..5).filter { config.getLocationEnabled(it) }
+        if (enabledIndexes.isEmpty()) {
+            // 异常兑底：全关时重开位置1
+            config.setLocationEnabled(1, true)
+            switches.firstOrNull()?.isChecked = true
+            refreshLocationSwitchStates(switches)
+            return
+        }
+        val singleEnabled = enabledIndexes.size == 1
+        for ((i, switch) in switches.withIndex()) {
+            val index = i + 1
+            // 只剩一个启用时，把那个启用的开关禁用（灰掉不可关）
+            switch.isEnabled = !(singleEnabled && config.getLocationEnabled(index))
+        }
+    }
+
+    private fun setupDialogShowTwoLevelPath() = binding.apply {
+        settingsDialogShowTwoLevelPath.isChecked = config.dialogShowTwoLevelPath
+        settingsDialogShowTwoLevelPathHolder.setOnClickListener {
+            settingsDialogShowTwoLevelPath.toggle()
+            config.dialogShowTwoLevelPath = settingsDialogShowTwoLevelPath.isChecked
         }
     }
 

@@ -52,3 +52,21 @@ fun Context.checkLocationPermission(): Boolean {
         PERMISSION_ACCESS_COARSE_LOCATION
     )
 }
+
+// 取路径最后一级文件夹名，例如 /a/b/c -> c
+fun String.getLastFolderName(): String {
+    val trimmed = trimEnd('/')
+    val parts = trimmed.split('/').filter { it.isNotEmpty() }
+    return parts.lastOrNull() ?: trimmed
+}
+
+// 取路径最后两级文件夹名，例如 /a/b/c -> b/c；不足两级则返回能取到的部分
+fun String.getLastTwoFolderNames(): String {
+    val trimmed = trimEnd('/')
+    val parts = trimmed.split('/').filter { it.isNotEmpty() }
+    return when {
+        parts.size >= 2 -> "${parts[parts.size - 2]}/${parts.last()}"
+        parts.size == 1 -> parts.last()
+        else -> trimmed
+    }
+}

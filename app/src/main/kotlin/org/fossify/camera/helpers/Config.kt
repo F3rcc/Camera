@@ -107,4 +107,45 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(AUTO_RENAME_PHOTO, true)
         set(autoRenamePhoto) = prefs.edit().putBoolean(AUTO_RENAME_PHOTO, autoRenamePhoto).apply()
 
+    fun getLocationEnabled(index: Int): Boolean {
+        return prefs.getBoolean("$SAVE_LOCATION_ENABLED_PREFIX$index", index == 1)
+    }
+
+    fun setLocationEnabled(index: Int, enabled: Boolean) {
+        prefs.edit().putBoolean("$SAVE_LOCATION_ENABLED_PREFIX$index", enabled).apply()
+    }
+
+    // 位置1 复用 savePhotosFolder（含 DCIM 兜底逻辑），位置2~5 用独立 pref。
+    fun getLocationPath(index: Int): String {
+        return if (index == 1) {
+            savePhotosFolder
+        } else {
+            prefs.getString("$SAVE_LOCATION_PATH_PREFIX$index", "").orEmpty()
+        }
+    }
+
+    fun setLocationPath(index: Int, path: String) {
+        if (index == 1) {
+            savePhotosFolder = path
+        } else {
+            prefs.edit().putString("$SAVE_LOCATION_PATH_PREFIX$index", path).apply()
+        }
+    }
+
+    var dialogShowTwoLevelPath: Boolean
+        get() = prefs.getBoolean(DIALOG_SHOW_TWO_LEVEL_PATH, true)
+        set(enabled) = prefs.edit().putBoolean(DIALOG_SHOW_TWO_LEVEL_PATH, enabled).apply()
+
+    var lastSelectedPhotoLocations: Set<Int>
+        get() = prefs.getString(LAST_SELECTED_PHOTO_LOCATIONS, "1").orEmpty()
+            .split(',').mapNotNull { it.toIntOrNull() }.toSet()
+        set(locations) = prefs.edit()
+            .putString(LAST_SELECTED_PHOTO_LOCATIONS, locations.sorted().joinToString(",")).apply()
+
+    var lastSelectedVideoLocations: Set<Int>
+        get() = prefs.getString(LAST_SELECTED_VIDEO_LOCATIONS, "1").orEmpty()
+            .split(',').mapNotNull { it.toIntOrNull() }.toSet()
+        set(locations) = prefs.edit()
+            .putString(LAST_SELECTED_VIDEO_LOCATIONS, locations.sorted().joinToString(",")).apply()
+
 }

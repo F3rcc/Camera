@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <RelativeLayout
+        android:id="@+id/location_switch_holder"
+        style="@style/SettingsHolderCheckboxStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <org.fossify.commons.views.MyMaterialSwitch
+            android:id="@+id/location_switch"
+            style="@style/SettingsSwitchStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            tools:text="位置1" />
+
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:id="@+id/location_path_holder"
+        style="@style/SettingsHolderTextViewStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <org.fossify.commons.views.MyTextView
+            android:id="@+id/location_path_label"
+            style="@style/SettingsTextLabelStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/save_path" />
+
+        <org.fossify.commons.views.MyTextView
+            android:id="@+id/location_path_value"
+            style="@style/SettingsTextValueStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/location_path_label"
+            tools:text="DCIM/Camera" />
+
+    </RelativeLayout>
+
+</LinearLayout>

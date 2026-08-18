@@ -261,26 +261,31 @@
 
                 </RelativeLayout>
 
+                <TextView
+                    android:id="@+id/settings_save_locations_label"
+                    style="@style/SettingsSectionLabelStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/save_locations_section" />
+
+                <LinearLayout
+                    android:id="@+id/settings_save_locations_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
                 <RelativeLayout
-                    android:id="@+id/settings_save_photos_holder"
-                    style="@style/SettingsHolderTextViewStyle"
+                    android:id="@+id/settings_dialog_show_two_level_path_holder"
+                    style="@style/SettingsHolderCheckboxStyle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
 
-                    <org.fossify.commons.views.MyTextView
-                        android:id="@+id/settings_save_photos_label"
-                        style="@style/SettingsTextLabelStyle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/save_photos" />
-
-                    <org.fossify.commons.views.MyTextView
-                        android:id="@+id/settings_save_photos"
-                        style="@style/SettingsTextValueStyle"
+                    <org.fossify.commons.views.MyMaterialSwitch
+                        android:id="@+id/settings_dialog_show_two_level_path"
+                        style="@style/SettingsSwitchStyle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_below="@+id/settings_save_photos_label"
-                        tools:text="Internal/DCIM" />
+                        android:text="@string/dialog_show_two_level_path" />
 
                 </RelativeLayout>
 

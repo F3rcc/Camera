@@ -24,6 +24,11 @@ const val CAPTURE_MODE = "capture_mode"
 const val TIMER_MODE = "timer_mode"
 const val MAX_BRIGHTNESS = "max_brightness"
 const val AUTO_RENAME_PHOTO = "auto_rename_photo"
+const val SAVE_LOCATION_ENABLED_PREFIX = "save_location_enabled_"
+const val SAVE_LOCATION_PATH_PREFIX = "save_location_path_"
+const val LAST_SELECTED_PHOTO_LOCATIONS = "last_selected_photo_locations"
+const val LAST_SELECTED_VIDEO_LOCATIONS = "last_selected_video_locations"
+const val DIALOG_SHOW_TWO_LEVEL_PATH = "dialog_show_two_level_path"
 
 const val FLASH_OFF = 0
 const val FLASH_ON = 1

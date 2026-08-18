@@ -56,6 +56,15 @@
     <string name="auto_rename_photo">Rename photo after capture</string>
     <string name="rename_photo_title">Rename photo</string>
     <string name="rename_photo_failed">Rename failed</string>
+    <string name="rename_video_title">Rename video</string>
+    <string name="save_locations_section">Save locations</string>
+    <string name="location_index">Location %d</string>
+    <string name="location_staging_note">(fixed staging folder)</string>
+    <string name="save_path">Save path</string>
+    <string name="dialog_show_two_level_path">Show two-level path in dialog</string>
+    <string name="save_location_dialog_title">Save location</string>
+    <string name="saving_progress">Saving…</string>
+    <string name="location_save_failed">Location %d failed to save</string>
     <!--
         Haven't found some strings? There's more at
         https://github.com/FossifyOrg/Commons/tree/master/commons/src/main/res
