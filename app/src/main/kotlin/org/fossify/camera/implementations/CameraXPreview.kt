@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Rational
