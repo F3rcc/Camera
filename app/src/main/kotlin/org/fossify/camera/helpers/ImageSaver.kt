@@ -5,6 +5,7 @@ import android.content.ContentResolver
 import android.content.ContentValues
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCapture.Metadata
 import androidx.camera.core.ImageCaptureException
@@ -66,8 +67,21 @@ class ImageSaver private constructor(
 
     fun saveImage() {
         ensureBackgroundThread {
-            // Save the image to a temp file first. This is necessary because ExifInterface only
-            // supports saving to File.
+            val directOutput = mediaOutput as? MediaOutput.OutputStreamMediaOutput
+            val directPath = directOutput?.uri?.takeIf { it.scheme == "file" }?.path
+            // only take the shortcut when the stream really writes into that very file, saf/
+            // document based outputs are left on the temp file path below
+            if (directOutput != null && directPath != null &&
+                directOutput.outputStream is FileOutputStream
+            ) {
+                // the destination is a plain file, write the jpeg into it directly instead of
+                // writing a whole temp file and copying it over afterwards
+                saveImageToFile(directOutput, File(directPath))
+                return@ensureBackgroundThread
+            }
+
+            // The destination is safe/mediastore based, a temp file is needed because
+            // ExifInterface can only save attributes to a File.
             val tempFile = saveImageToTempFile()
             if (tempFile != null) {
                 copyTempFileToDestination(tempFile)
@@ -77,6 +91,55 @@ class ImageSaver private constructor(
                     (mediaOutput as? MediaOutput.OutputStreamMediaOutput)?.outputStream?.close()
                 }
             }
+        }
+    }
+
+    private fun saveImageToFile(mediaOutput: MediaOutput.OutputStreamMediaOutput, targetFile: File) {
+        var saveError: SaveError? = null
+        var errorMessage: String? = null
+        var exception: Exception? = null
+
+        try {
+            val byteArray = imageToJpegByteArray(image, jpegQuality)
+            mediaOutput.outputStream.use { it.write(byteArray) }
+
+            if (targetFile.length() <= 0L) {
+                saveError = SaveError.FILE_IO_FAILED
+                errorMessage = "Failed to write destination file."
+                exception = IOException("empty destination file")
+            } else {
+                try {
+                    applyExifAttributes(targetFile, byteArray)
+                } catch (e: Exception) {
+                    // never lose an already written photo because of a broken exif block
+                    Log.w("ImageSaver", "failed to update the exif attributes", e)
+                }
+            }
+        } catch (e: IOException) {
+            saveError = SaveError.FILE_IO_FAILED
+            errorMessage = "Failed to write destination file."
+            exception = e
+        } catch (e: IllegalArgumentException) {
+            saveError = SaveError.FILE_IO_FAILED
+            errorMessage = "Failed to write destination file."
+            exception = e
+        } catch (e: CodecFailedException) {
+            saveError = when (e.failureType) {
+                CodecFailedException.FailureType.ENCODE_FAILED -> SaveError.ENCODE_FAILED
+                CodecFailedException.FailureType.DECODE_FAILED -> SaveError.CROP_FAILED
+                CodecFailedException.FailureType.UNKNOWN -> SaveError.UNKNOWN
+            }
+            errorMessage = "Failed to transcode Image"
+            exception = e
+        } finally {
+            // the stream was opened before the capture, it always has to be released
+            runCatching { mediaOutput.outputStream.close() }
+        }
+
+        if (saveError != null) {
+            postError(saveError, errorMessage!!, exception!!)
+        } else {
+            onImageSaved(mediaOutput.uri)
         }
     }
 
@@ -108,37 +171,7 @@ class ImageSaver private constructor(
                 output.write(byteArray)
             }
 
-            // The image is only re-encoded when it has to be cropped, otherwise the raw camera
-            // jpeg is written as is and already carries the camera EXIF. Rewriting the whole
-            // file just to copy its own attributes back is a waste of time.
-            val isCropped =
-                image.width != image.cropRect.width() || image.height != image.cropRect.height()
-
-            if (saveExifAttributes && needsExifRewrite(isCropped)) {
-                val exifInterface = ExifInterface(tempFile)
-                val sourceBytes = if (isCropped) jpegImageToJpegByteArray(image) else byteArray
-                val inputStream: InputStream = ByteArrayInputStream(sourceBytes)
-                ExifInterface(inputStream).copyTo(exifInterface)
-
-                // Overwrite the original orientation if the quirk exists.
-                if (!ExifRotationAvailability().shouldUseExifOrientation(image)) {
-                    exifInterface.rotate(image.imageInfo.rotationDegrees)
-                }
-
-                if (metadata.isReversedHorizontal) {
-                    exifInterface.flipHorizontally()
-                }
-
-                if (metadata.isReversedVertical) {
-                    exifInterface.flipVertically()
-                }
-
-                if (metadata.location != null) {
-                    exifInterface.setGpsInfo(metadata.location)
-                }
-
-                exifInterface.saveAttributes()
-            }
+            applyExifAttributes(tempFile, byteArray)
         } catch (e: IOException) {
             saveError = SaveError.FILE_IO_FAILED
             errorMessage = "Failed to write temp file"
@@ -188,6 +221,41 @@ class ImageSaver private constructor(
             metadata.isReversedVertical ||
             metadata.location != null ||
             !ExifRotationAvailability().shouldUseExifOrientation(image)
+    }
+
+    @SuppressLint("RestrictedApi")
+    private fun applyExifAttributes(targetFile: File, bytes: ByteArray) {
+        if (!saveExifAttributes) {
+            return
+        }
+
+        val isCropped =
+            image.width != image.cropRect.width() || image.height != image.cropRect.height()
+        if (!needsExifRewrite(isCropped)) {
+            return
+        }
+
+        val exifInterface = ExifInterface(targetFile)
+        val sourceBytes = if (isCropped) jpegImageToJpegByteArray(image) else bytes
+        val inputStream: InputStream = ByteArrayInputStream(sourceBytes)
+        ExifInterface(inputStream).copyTo(exifInterface)
+
+        // Overwrite the original orientation if the quirk exists.
+        if (!ExifRotationAvailability().shouldUseExifOrientation(image)) {
+            exifInterface.rotate(image.imageInfo.rotationDegrees)
+        }
+
+        if (metadata.isReversedHorizontal) {
+            exifInterface.flipHorizontally()
+        }
+
+        if (metadata.isReversedVertical) {
+            exifInterface.flipVertically()
+        }
+
+        metadata.location?.let { exifInterface.setGpsInfo(it) }
+
+        exifInterface.saveAttributes()
     }
 
     /**

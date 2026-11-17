@@ -715,9 +715,9 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
 
     override fun onMediaSaved(uri: Uri, isPhoto: Boolean) {
         binding.layoutTop.changeResolution.isEnabled = true
-        loadLastTakenMedia(uri)
         when {
             isImageCaptureIntent() -> {
+                loadLastTakenMedia(uri)
                 Intent().apply {
                     data = uri
                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -727,6 +727,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             }
 
             isVideoCaptureIntent() -> {
+                loadLastTakenMedia(uri)
                 Intent().apply {
                     data = uri
                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -735,7 +736,14 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                 finish()
             }
 
-            config.autoRenamePhoto -> showRenamePhotoDialog(uri, isPhoto)
+            else -> {
+                // show the rename dialog first, the thumbnail is not needed to build it and
+                // decoding a full size photo before it only delays the dialog
+                if (config.autoRenamePhoto) {
+                    showRenamePhotoDialog(uri, isPhoto)
+                }
+                loadLastTakenMedia(uri)
+            }
         }
     }
 
@@ -764,6 +772,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         }
         val selected = preChecked.toMutableSet()
         val twoLevel = config.dialogShowTwoLevelPath
+        val primaryColor = getProperPrimaryColor()
 
         val input = AppCompatEditText(this).apply {
             setText(baseName)
@@ -797,7 +806,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                 setSingleLine()
                 ellipsize = TextUtils.TruncateAt.START
                 setTextColor(Color.WHITE)
-                buttonTintList = ColorStateList.valueOf(getProperPrimaryColor())
+                buttonTintList = ColorStateList.valueOf(primaryColor)
                 setOnLongClickListener {
                     toast(path)
                     true
@@ -829,6 +838,8 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             .setNegativeButton(org.fossify.commons.R.string.cancel, null)
             .apply {
                 setupDialogStuff(container, this, titleId = titleId) { dialog ->
+                    // ask for the keyboard right away so it shows up together with the dialog
+                    dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
                     dialog.window?.setBackgroundDrawable(
                         resources.getColoredDrawableWithColor(
                             org.fossify.commons.R.drawable.dialog_bg,
@@ -885,7 +896,6 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                     }
 
                     input.post {
-                        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
                         input.requestFocus()
                         input.selectAll()
                     }
