@@ -39,7 +39,7 @@ class ImageSaver private constructor(
     companion object {
         private const val TEMP_FILE_PREFIX = "SimpleCamera"
         private const val TEMP_FILE_SUFFIX = ".tmp"
-        private const val COPY_BUFFER_SIZE = 1024
+        private const val COPY_BUFFER_SIZE = 128 * 1024
         private const val PENDING = 1
         private const val NOT_PENDING = 0
 
@@ -71,6 +71,11 @@ class ImageSaver private constructor(
             val tempFile = saveImageToTempFile()
             if (tempFile != null) {
                 copyTempFileToDestination(tempFile)
+            } else {
+                // the temp file could not even be created, release the destination stream
+                runCatching {
+                    (mediaOutput as? MediaOutput.OutputStreamMediaOutput)?.outputStream?.close()
+                }
             }
         }
     }
@@ -98,14 +103,21 @@ class ImageSaver private constructor(
         }
 
         try {
-            val output = FileOutputStream(tempFile)
             val byteArray: ByteArray = imageToJpegByteArray(image, jpegQuality)
-            output.write(byteArray)
+            FileOutputStream(tempFile).use { output ->
+                output.write(byteArray)
+            }
 
-            if (saveExifAttributes) {
+            // The image is only re-encoded when it has to be cropped, otherwise the raw camera
+            // jpeg is written as is and already carries the camera EXIF. Rewriting the whole
+            // file just to copy its own attributes back is a waste of time.
+            val isCropped =
+                image.width != image.cropRect.width() || image.height != image.cropRect.height()
+
+            if (saveExifAttributes && needsExifRewrite(isCropped)) {
                 val exifInterface = ExifInterface(tempFile)
-                val imageByteArray = jpegImageToJpegByteArray(image)
-                val inputStream: InputStream = ByteArrayInputStream(imageByteArray)
+                val sourceBytes = if (isCropped) jpegImageToJpegByteArray(image) else byteArray
+                val inputStream: InputStream = ByteArrayInputStream(sourceBytes)
                 ExifInterface(inputStream).copyTo(exifInterface)
 
                 // Overwrite the original orientation if the quirk exists.
@@ -165,6 +177,20 @@ class ImageSaver private constructor(
     }
 
     /**
+     * Whether the EXIF block really has to be rewritten. Without a flip, a crop, a location or a
+     * rotation quirk the temp file is byte identical to the camera output, so copying its own
+     * attributes onto itself only costs a full read and write of the jpeg.
+     */
+    @SuppressLint("RestrictedApi")
+    private fun needsExifRewrite(isCropped: Boolean): Boolean {
+        return isCropped ||
+            metadata.isReversedHorizontal ||
+            metadata.isReversedVertical ||
+            metadata.location != null ||
+            !ExifRotationAvailability().shouldUseExifOrientation(image)
+    }
+
+    /**
      * Copy the temp file to user specified destination.
      *
      *
@@ -196,7 +222,13 @@ class ImageSaver private constructor(
                 }
 
                 is MediaOutput.OutputStreamMediaOutput -> {
-                    copyTempFileToOutputStream(tempFile, mediaOutput.outputStream)
+                    try {
+                        copyTempFileToOutputStream(tempFile, mediaOutput.outputStream)
+                    } finally {
+                        // the stream was opened before the capture, close it so the destination
+                        // file is flushed and we do not leak a file descriptor per photo
+                        mediaOutput.outputStream.close()
+                    }
                     outputUri = mediaOutput.uri
                 }
 
@@ -286,6 +318,7 @@ class ImageSaver private constructor(
                 outputStream.write(buf, 0, len)
             }
         }
+        outputStream.flush()
     }
 
     /** Type of error that occurred during save  */

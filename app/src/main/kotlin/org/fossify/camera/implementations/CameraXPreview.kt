@@ -6,6 +6,8 @@ import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import android.util.Rational
 import android.util.Size
 import android.view.Display
@@ -59,6 +61,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.window.layout.WindowMetricsCalculator
+import org.fossify.camera.BuildConfig
 import org.fossify.camera.R
 import org.fossify.camera.extensions.checkLocationPermission
 import org.fossify.camera.extensions.config
@@ -582,6 +585,11 @@ class CameraXPreview(
         }
 
         val imageCapture = imageCapture
+        val pressTime = SystemClock.elapsedRealtime()
+
+        // give immediate feedback, the jpeg itself is only ready in a moment
+        listener.shutterAnimation()
+        playShutterSoundIfEnabled()
 
         val metadata = Metadata().apply {
             isReversedHorizontal = isFrontCameraInUse() && config.flipPhotos
@@ -591,10 +599,15 @@ class CameraXPreview(
         }
 
         val mediaOutput = mediaOutputHelper.getImageMediaOutput()
+        logCaptureDelay("media output ready", pressTime)
+
         imageCapture!!.takePicture(mainExecutor, object : OnImageCapturedCallback() {
+            override fun onCaptureStarted() {
+                logCaptureDelay("shutter fired", pressTime)
+            }
+
             override fun onCaptureSuccess(image: ImageProxy) {
-                listener.shutterAnimation()
-                playShutterSoundIfEnabled()
+                logCaptureDelay("jpeg ready", pressTime)
                 ensureBackgroundThread {
                     image.use {
                         if (mediaOutput is MediaOutput.BitmapOutput) {
@@ -617,6 +630,7 @@ class CameraXPreview(
                                 jpegQuality = config.photoQuality,
                                 saveExifAttributes = config.savePhotoMetadata,
                                 onImageSaved = { savedUri ->
+                                    logCaptureDelay("saved", pressTime)
                                     activity.runOnUiThread {
                                         listener.onPhotoCaptureEnd()
                                         listener.onMediaSaved(savedUri, isPhoto = true)
@@ -638,6 +652,12 @@ class CameraXPreview(
     private fun handleImageCaptureError(exception: ImageCaptureException) {
         listener.onPhotoCaptureEnd()
         cameraErrorHandler.handleImageCaptureError(exception.imageCaptureError)
+    }
+
+    private fun logCaptureDelay(label: String, startTime: Long) {
+        if (BuildConfig.DEBUG) {
+            Log.d("CameraTiming", "$label +${SystemClock.elapsedRealtime() - startTime} ms")
+        }
     }
 
     override fun initPhotoMode() {

@@ -326,7 +326,7 @@ class MediaOutputHelper(
     private fun copyStream(sourceUri: Uri, outputStream: OutputStream): Boolean {
         val input = contentResolver.openInputStream(sourceUri) ?: return false
         return try {
-            input.use { it.copyTo(outputStream) }
+            input.use { it.copyTo(outputStream, 128 * 1024) }
             true
         } finally {
             outputStream.close()
