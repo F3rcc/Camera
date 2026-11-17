@@ -23,6 +23,8 @@ interface MyPreview {
 
     fun showChangeResolution()
 
+    fun setZoomRatio(ratio: Float)
+
     fun distributeMedia(
         sourceUri: Uri,
         newBaseName: String,

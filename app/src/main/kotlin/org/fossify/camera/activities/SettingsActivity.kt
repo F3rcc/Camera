@@ -60,6 +60,7 @@ class SettingsActivity : SimpleActivity() {
         setupPhotoQuality()
         setupCaptureMode()
         setupAutoRenamePhoto()
+        setupRememberZoom()
         setupUsageInstructions()
         updateTextColors(binding.settingsHolder)
 
@@ -394,6 +395,19 @@ class SettingsActivity : SimpleActivity() {
         settingsAutoRenamePhotoHolder.setOnClickListener {
             settingsAutoRenamePhoto.toggle()
             config.autoRenamePhoto = settingsAutoRenamePhoto.isChecked
+        }
+    }
+
+    private fun setupRememberZoom() = binding.apply {
+        settingsRememberZoom.isChecked = config.rememberZoom
+        settingsRememberZoomHolder.setOnClickListener {
+            settingsRememberZoom.toggle()
+            config.rememberZoom = settingsRememberZoom.isChecked
+            if (!config.rememberZoom) {
+                // forget the stored ratios, the next launch starts at 1x again
+                config.zoomRatioBack = 1f
+                config.zoomRatioFront = 1f
+            }
         }
     }
 

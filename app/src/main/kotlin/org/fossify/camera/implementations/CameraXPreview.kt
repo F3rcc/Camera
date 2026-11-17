@@ -37,6 +37,7 @@ import androidx.camera.core.Preview
 import androidx.camera.core.UseCase
 import androidx.camera.core.UseCaseGroup
 import androidx.camera.core.ViewPort
+import androidx.camera.core.ZoomState
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionSelector.PREFER_CAPTURE_RATE_OVER_HIGHER_RESOLUTION
 import androidx.camera.core.resolutionselector.ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE
@@ -60,6 +61,7 @@ import androidx.core.view.doOnLayout
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
 import androidx.window.layout.WindowMetricsCalculator
 import org.fossify.camera.BuildConfig
 import org.fossify.camera.R
@@ -130,6 +132,10 @@ class CameraXPreview(
         override fun onDeviceRotationChanged(rotation: Int) {
             applyRotation(rotation)
         }
+    }
+
+    private val zoomStateObserver = Observer<ZoomState> { state ->
+        listener.onZoomStateChanged(state.minZoomRatio, state.maxZoomRatio, state.zoomRatio)
     }
 
     private val cameraHandler = Handler(Looper.getMainLooper())
@@ -343,6 +349,8 @@ class CameraXPreview(
     private fun setupCameraObservers() {
         listener.setFlashAvailable(camera?.cameraInfo?.hasFlashUnit() ?: false)
         listener.onChangeCamera(isFrontCameraInUse())
+        camera?.cameraInfo?.zoomState?.removeObservers(activity)
+        camera?.cameraInfo?.zoomState?.observe(activity, zoomStateObserver)
         if (isPhotoCapture) {
             listener.onInitPhotoMode()
         } else {
@@ -467,6 +475,13 @@ class CameraXPreview(
 
     override fun onStop(owner: LifecycleOwner) {
         orientationManager.removeListener(orientationListener)
+    }
+
+    override fun setZoomRatio(ratio: Float) {
+        val zoomState = camera?.cameraInfo?.zoomState?.value ?: return
+        camera?.cameraControl?.setZoomRatio(
+            ratio.coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
+        )
     }
 
     override fun isInPhotoMode(): Boolean {

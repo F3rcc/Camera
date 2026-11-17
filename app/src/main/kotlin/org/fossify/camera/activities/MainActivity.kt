@@ -1,14 +1,18 @@
 package org.fossify.camera.activities
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.ProgressDialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.text.InputType
 import android.text.TextUtils
@@ -50,8 +54,11 @@ import org.fossify.camera.models.TimerMode
 import org.fossify.camera.views.FocusCircleView
 import org.fossify.commons.extensions.*
 import org.fossify.commons.helpers.*
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, CameraXPreviewListener {
     private companion object {
@@ -61,6 +68,8 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         private const val MIN_SWIPE_DISTANCE_X = 100
         private const val TIMER_2_SECONDS = 2001
         private const val SWITCH_CAMERA_ROTATION_ANGLE = 180f
+        private const val MAX_ZOOM_PRESETS = 4
+        private const val ZOOM_CHIP_BACKGROUND = 0x40FFFFFF
         private val RENAME_DIALOG_BACKGROUND_COLOR = 0xFF2A292F.toInt()
     }
 
@@ -90,6 +99,16 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             animateViews(rotationToUiDegrees(rotation))
         }
     }
+
+    private var zoomChips = mutableListOf<TextView>()
+    private var zoomChipRatios = listOf<Float>()
+    private var zoomBarMinRatio = -1f
+    private var zoomBarMaxRatio = -1f
+    private var zoomRestored = false
+    private var isFrontCameraSelected = false
+    private var lastZoomRatio = 1f
+    private val zoomSaveHandler = Handler(Looper.getMainLooper())
+    private val saveZoomRunnable = Runnable { persistZoomRatio() }
 
     private val tabSelectedListener = object : TabSelectedListener {
         override fun onTabSelected(tab: TabLayout.Tab) {
@@ -161,6 +180,8 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         super.onPause()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         OrientationManager.getInstance(this).removeListener(orientationListener)
+        zoomSaveHandler.removeCallbacks(saveZoomRunnable)
+        persistZoomRatio()
         if (!isAskingPermissions) {
             cancelTimer()
         }
@@ -561,6 +582,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     }
 
     override fun onInitPhotoMode() {
+        zoomRestored = false
         binding.apply {
             shutter.setImageResource(R.drawable.ic_shutter_animated)
             layoutTop.toggleTimer.beVisible()
@@ -572,6 +594,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     }
 
     override fun onInitVideoMode() {
+        zoomRestored = false
         binding.apply {
             shutter.setImageResource(R.drawable.ic_video_rec_animated)
             layoutTop.toggleTimer.fadeOut()
@@ -651,6 +674,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     private fun animateViews(degrees: Int) = binding.apply {
         val views = arrayOf(
             toggleCamera,
+            zoomBar,
             layoutTop.toggleTimer,
             layoutTop.toggleFlash,
             layoutTop.changeResolution,
@@ -676,6 +700,155 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
 
     private fun rotate(view: View, degrees: Int) =
         view.animate().rotation(degrees.toFloat()).start()
+
+    override fun onZoomStateChanged(minRatio: Float, maxRatio: Float, currentRatio: Float) {
+        lastZoomRatio = currentRatio
+        if (minRatio != zoomBarMinRatio || maxRatio != zoomBarMaxRatio) {
+            buildZoomBar(minRatio, maxRatio)
+        }
+
+        if (!zoomRestored) {
+            zoomRestored = true
+            val target = getZoomRatioToRestore(minRatio, maxRatio)
+            if (abs(target - currentRatio) > 0.02f) {
+                mPreview?.setZoomRatio(target)
+            }
+        }
+
+        updateZoomSelection(currentRatio)
+        scheduleZoomPersist()
+    }
+
+    private fun getZoomRatioToRestore(minRatio: Float, maxRatio: Float): Float {
+        val stored = if (config.rememberZoom) {
+            if (isFrontCameraSelected) config.zoomRatioFront else config.zoomRatioBack
+        } else {
+            1f
+        }
+        return stored.coerceIn(minRatio, maxRatio)
+    }
+
+    private fun buildZoomPresets(minRatio: Float, maxRatio: Float): List<Float> {
+        val presets = mutableListOf<Float>()
+        if (minRatio < 0.95f) {
+            presets.add(minRatio)
+        }
+        presets.add(1f)
+        listOf(2f, 5f, 10f).forEach { ratio ->
+            if (ratio <= maxRatio * 0.99f) {
+                presets.add(ratio)
+            }
+        }
+        return presets.distinct().sorted().take(MAX_ZOOM_PRESETS)
+    }
+
+    private fun buildZoomBar(minRatio: Float, maxRatio: Float) {
+        zoomBarMinRatio = minRatio
+        zoomBarMaxRatio = maxRatio
+        zoomChips.clear()
+        zoomChipRatios = emptyList()
+        binding.zoomBar.removeAllViews()
+
+        val presets = buildZoomPresets(minRatio, maxRatio)
+        if (presets.size < 2 || isImageCaptureIntent() || isVideoCaptureIntent()) {
+            binding.zoomBar.beGone()
+            return
+        }
+
+        val density = resources.displayMetrics.density
+        val horizontalPadding = (12 * density).toInt()
+        val verticalPadding = (5 * density).toInt()
+        val chipSpacing = (6 * density).toInt()
+
+        presets.forEach { ratio ->
+            val chip = TextView(this).apply {
+                text = formatZoomRatio(ratio)
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding)
+                setTextColor(Color.WHITE)
+                isClickable = true
+                setOnClickListener { animateZoomTo(ratio) }
+            }
+            binding.zoomBar.addView(
+                chip,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = chipSpacing }
+            )
+            zoomChips.add(chip)
+        }
+
+        zoomChipRatios = presets
+        binding.zoomBar.beVisible()
+        updateZoomSelection(lastZoomRatio)
+    }
+
+    private fun updateZoomSelection(currentRatio: Float) {
+        if (zoomChips.isEmpty()) {
+            return
+        }
+
+        val density = resources.displayMetrics.density
+        val primaryColor = getProperPrimaryColor()
+        zoomChips.forEachIndexed { index, chip ->
+            val ratio = zoomChipRatios.getOrNull(index) ?: return@forEachIndexed
+            val isSelected = abs(ratio - currentRatio) <= max(0.02f, ratio * 0.02f)
+            chip.background = GradientDrawable().apply {
+                cornerRadius = 15 * density
+                setColor(if (isSelected) primaryColor else ZOOM_CHIP_BACKGROUND)
+            }
+            chip.setTextColor(if (isSelected) Color.WHITE else Color.argb(204, 255, 255, 255))
+        }
+    }
+
+    private fun animateZoomTo(ratio: Float) {
+        if (abs(ratio - lastZoomRatio) < 0.01f) {
+            return
+        }
+
+        ValueAnimator.ofFloat(lastZoomRatio, ratio).apply {
+            duration = 200
+            interpolator = FastOutSlowInInterpolator()
+            addUpdateListener { mPreview?.setZoomRatio(it.animatedValue as Float) }
+            start()
+        }
+    }
+
+    private fun formatZoomRatio(ratio: Float): String {
+        return if (abs(ratio - ratio.roundToInt()) < 0.05f) {
+            "${ratio.roundToInt()}x"
+        } else {
+            String.format(Locale.US, "%.1fx", ratio)
+        }
+    }
+
+    private fun scheduleZoomPersist() {
+        if (!config.rememberZoom) {
+            return
+        }
+
+        zoomSaveHandler.removeCallbacks(saveZoomRunnable)
+        zoomSaveHandler.postDelayed(saveZoomRunnable, 400)
+    }
+
+    private fun persistZoomRatio() {
+        if (!config.rememberZoom) {
+            return
+        }
+
+        if (isFrontCameraSelected) {
+            config.zoomRatioFront = lastZoomRatio
+        } else {
+            config.zoomRatioBack = lastZoomRatio
+        }
+    }
+
+    override fun onChangeCamera(frontCamera: Boolean) {
+        isFrontCameraSelected = frontCamera
+        zoomRestored = false
+    }
 
     override fun setHasFrontAndBackCamera(hasFrontAndBack: Boolean) {
         binding.toggleCamera.beVisibleIf(hasFrontAndBack)

@@ -54,6 +54,7 @@
     <string name="shutter">Shutter</string>
     <string name="max_brightness">Max screen brightness in preview</string>
     <string name="auto_rename_photo">Rename photo after capture</string>
+    <string name="remember_zoom">Remember zoom ratio per camera</string>
     <string name="rename_photo_title">Rename photo</string>
     <string name="rename_photo_failed">Rename failed</string>
     <string name="rename_video_title">Rename video</string>

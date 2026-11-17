@@ -217,6 +217,21 @@
                 </RelativeLayout>
 
                 <RelativeLayout
+                    android:id="@+id/settings_remember_zoom_holder"
+                    style="@style/SettingsHolderCheckboxStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <org.fossify.commons.views.MyMaterialSwitch
+                        android:id="@+id/settings_remember_zoom"
+                        style="@style/SettingsSwitchStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/remember_zoom" />
+
+                </RelativeLayout>
+
+                <RelativeLayout
                     android:id="@+id/settings_save_photo_metadata_holder"
                     style="@style/SettingsHolderCheckboxStyle"
                     android:layout_width="match_parent"

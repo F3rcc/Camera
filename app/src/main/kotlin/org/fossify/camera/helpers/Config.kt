@@ -107,6 +107,18 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(AUTO_RENAME_PHOTO, true)
         set(autoRenamePhoto) = prefs.edit().putBoolean(AUTO_RENAME_PHOTO, autoRenamePhoto).apply()
 
+    var rememberZoom: Boolean
+        get() = prefs.getBoolean(REMEMBER_ZOOM, true)
+        set(rememberZoom) = prefs.edit().putBoolean(REMEMBER_ZOOM, rememberZoom).apply()
+
+    var zoomRatioBack: Float
+        get() = prefs.getFloat(ZOOM_RATIO_BACK, 1f)
+        set(zoomRatioBack) = prefs.edit().putFloat(ZOOM_RATIO_BACK, zoomRatioBack).apply()
+
+    var zoomRatioFront: Float
+        get() = prefs.getFloat(ZOOM_RATIO_FRONT, 1f)
+        set(zoomRatioFront) = prefs.edit().putFloat(ZOOM_RATIO_FRONT, zoomRatioFront).apply()
+
     fun getLocationEnabled(index: Int): Boolean {
         return prefs.getBoolean("$SAVE_LOCATION_ENABLED_PREFIX$index", index == 1)
     }
