@@ -2,7 +2,6 @@ package org.fossify.camera.implementations
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Handler
@@ -13,7 +12,6 @@ import android.view.Display
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.MotionEvent
-import android.view.OrientationEventListener
 import android.view.ScaleGestureDetector
 import android.view.Surface
 import androidx.camera.core.Camera
@@ -61,7 +59,6 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.window.layout.WindowMetricsCalculator
-import com.bumptech.glide.load.ImageHeaderParser.UNKNOWN_ORIENTATION
 import org.fossify.camera.R
 import org.fossify.camera.extensions.checkLocationPermission
 import org.fossify.camera.extensions.config
@@ -81,6 +78,7 @@ import org.fossify.camera.helpers.MediaDistributor
 import org.fossify.camera.helpers.MediaOutputHelper
 import org.fossify.camera.helpers.MediaSizeStore
 import org.fossify.camera.helpers.MediaSoundHelper
+import org.fossify.camera.helpers.OrientationManager
 import org.fossify.camera.helpers.PinchToZoomOnScaleGestureListener
 import org.fossify.camera.helpers.SimpleLocationManager
 import org.fossify.camera.helpers.VideoQualityManager
@@ -123,30 +121,14 @@ class CameraXPreview(
     private val imageQualityManager = ImageQualityManager(activity)
     private val mediaSizeStore = MediaSizeStore(config)
     private val mediaDistributor by lazy { MediaDistributor(activity, mediaOutputHelper) }
+    private val orientationManager by lazy { OrientationManager.getInstance(activity) }
 
-    private val orientationEventListener =
-        object : OrientationEventListener(activity, SensorManager.SENSOR_DELAY_NORMAL) {
-            @SuppressLint("RestrictedApi")
-            override fun onOrientationChanged(orientation: Int) {
-                if (orientation == UNKNOWN_ORIENTATION) {
-                    return
-                }
-
-                val rotation = when (orientation) {
-                    in 45 until 135 -> Surface.ROTATION_270
-                    in 135 until 225 -> Surface.ROTATION_180
-                    in 225 until 315 -> Surface.ROTATION_90
-                    else -> Surface.ROTATION_0
-                }
-
-                if (lastRotation != rotation) {
-                    preview?.targetRotation = rotation
-                    imageCapture?.targetRotation = rotation
-                    videoCapture?.targetRotation = rotation
-                    lastRotation = rotation
-                }
-            }
+    private val orientationListener = object : OrientationManager.Listener {
+        override fun onDeviceRotationChanged(rotation: Int) {
+            applyRotation(rotation)
         }
+    }
+
     private val cameraHandler = Handler(Looper.getMainLooper())
     private val photoModeRunnable = Runnable {
         if (imageCapture == null) {
@@ -181,7 +163,7 @@ class CameraXPreview(
     private var cameraSelector = config.lastUsedCameraLens.toCameraSelector()
     private var flashMode = FLASH_MODE_OFF
     private var isPhotoCapture = initInPhotoMode
-    private var lastRotation = 0
+    private var lastRotation = Surface.ROTATION_0
     private var lastCameraStartTime = 0L
     private var simpleLocationManager: SimpleLocationManager? = null
 
@@ -191,6 +173,17 @@ class CameraXPreview(
 
     private fun bindToLifeCycle() {
         activity.lifecycle.addObserver(this)
+    }
+
+    private fun applyRotation(rotation: Int) {
+        if (lastRotation == rotation) {
+            return
+        }
+
+        lastRotation = rotation
+        preview?.targetRotation = rotation
+        imageCapture?.targetRotation = rotation
+        videoCapture?.targetRotation = rotation
     }
 
     private fun startCamera(switching: Boolean = false) {
@@ -230,7 +223,9 @@ class CameraXPreview(
 
         val isFullSize = resolution.isFullScreen
         previewView.scaleType = if (isFullSize) ScaleType.FILL_CENTER else ScaleType.FIT_CENTER
-        val rotation = previewView.display.rotation
+        val rotation = orientationManager.rotation
+        lastRotation = rotation
+        val viewPortRotation = previewView.display.rotation
         val targetResolution = Size(resolution.width, resolution.height)
 
         val previewUseCase = buildPreview(targetResolution, rotation)
@@ -241,7 +236,7 @@ class CameraXPreview(
             val metrics = windowMetricsCalculator.computeCurrentWindowMetrics(activity).bounds
             val screenWidth = metrics.width()
             val screenHeight = metrics.height()
-            val viewPort = ViewPort.Builder(Rational(screenWidth, screenHeight), rotation).build()
+            val viewPort = ViewPort.Builder(Rational(screenWidth, screenHeight), viewPortRotation).build()
 
             val useCaseGroup = UseCaseGroup.Builder()
                 .addUseCase(previewUseCase)
@@ -283,7 +278,7 @@ class CameraXPreview(
                 videoCapture = null
             }
         } else {
-            buildVideoCapture().also {
+            buildVideoCapture(rotation).also {
                 videoCapture = it
                 imageCapture = null
             }
@@ -327,7 +322,7 @@ class CameraXPreview(
         }
     }
 
-    private fun buildVideoCapture(): VideoCapture<Recorder> {
+    private fun buildVideoCapture(rotation: Int): VideoCapture<Recorder> {
         val qualitySelector = QualitySelector.from(
             videoQualityManager.getUserSelectedQuality(cameraSelector).toCameraXQuality(),
             FallbackStrategy.higherQualityOrLowerThan(Quality.SD),
@@ -337,7 +332,9 @@ class CameraXPreview(
             .setQualitySelector(qualitySelector)
             .build()
 
-        return VideoCapture.withOutput(recorder)
+        return VideoCapture.withOutput(recorder).apply {
+            targetRotation = rotation
+        }
     }
 
     private fun setupCameraObservers() {
@@ -426,7 +423,7 @@ class CameraXPreview(
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        orientationEventListener.enable()
+        orientationManager.addListener(orientationListener)
         previewView.doOnLayout {
             if (owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                 startCamera()
@@ -466,7 +463,7 @@ class CameraXPreview(
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        orientationEventListener.disable()
+        orientationManager.removeListener(orientationListener)
     }
 
     override fun isInPhotoMode(): Boolean {

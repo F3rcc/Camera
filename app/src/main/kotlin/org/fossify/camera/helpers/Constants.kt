@@ -1,5 +1,7 @@
 package org.fossify.camera.helpers
 
+import android.view.Surface
+
 const val ORIENT_PORTRAIT = 0
 const val ORIENT_LANDSCAPE_LEFT = 1
 const val ORIENT_LANDSCAPE_RIGHT = 2
@@ -38,5 +40,12 @@ const val FLASH_ALWAYS_ON = 3
 fun compensateDeviceRotation(orientation: Int) = when (orientation) {
     ORIENT_LANDSCAPE_LEFT -> 270
     ORIENT_LANDSCAPE_RIGHT -> 90
+    else -> 0
+}
+
+fun rotationToUiDegrees(rotation: Int) = when (rotation) {
+    Surface.ROTATION_90 -> 90
+    Surface.ROTATION_180 -> 180
+    Surface.ROTATION_270 -> -90
     else -> 0
 }

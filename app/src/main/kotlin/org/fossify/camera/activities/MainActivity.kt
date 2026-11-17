@@ -1,13 +1,11 @@
 package org.fossify.camera.activities
 
-import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.app.ProgressDialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.hardware.SensorManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -71,17 +69,27 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     private lateinit var defaultScene: Scene
     private lateinit var flashModeScene: Scene
     private lateinit var timerScene: Scene
-    private lateinit var mOrientationEventListener: OrientationEventListener
     private lateinit var mFocusCircleView: FocusCircleView
     private lateinit var mediaSoundHelper: MediaSoundHelper
     private var mPreview: MyPreview? = null
     private var mediaSizeToggleGroup: MaterialButtonToggleGroup? = null
     private var mPreviewUri: Uri? = null
     private var mIsHardwareShutterHandled = false
-    private var mLastHandledOrientation = 0
+    private var currentRotation = Surface.ROTATION_0
     private var countDownTimer: CountDownTimer? = null
     private var mOriginalBrightness: Float? = null
     private val photoRenamer by lazy { PhotoRenamer(this) }
+
+    private val orientationListener = object : OrientationManager.Listener {
+        override fun onDeviceRotationChanged(rotation: Int) {
+            if (isDestroyed || rotation == currentRotation) {
+                return
+            }
+
+            currentRotation = rotation
+            animateViews(rotationToUiDegrees(rotation))
+        }
+    }
 
     private val tabSelectedListener = object : TabSelectedListener {
         override fun onTabSelected(tab: TabLayout.Tab) {
@@ -111,7 +119,6 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         initVariables()
         tryInitCamera()
         supportActionBar?.hide()
-        setupOrientationEventListener()
 
         val windowInsetsController = ViewCompat.getWindowInsetsController(window.decorView)
         windowInsetsController?.systemBarsBehavior =
@@ -138,7 +145,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             setupPreviewImage(isInPhotoMode)
             mFocusCircleView.setStrokeColor(getProperPrimaryColor())
             toggleActionButtons(enabled = true)
-            mOrientationEventListener.enable()
+            OrientationManager.getInstance(this).addListener(orientationListener)
         }
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -153,15 +160,10 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     override fun onPause() {
         super.onPause()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        OrientationManager.getInstance(this).removeListener(orientationListener)
         if (!isAskingPermissions) {
             cancelTimer()
         }
-
-        if (!hasStorageAndCameraPermissions() || isAskingPermissions) {
-            return
-        }
-
-        mOrientationEventListener.disable()
     }
 
     override fun onDestroy() {
@@ -446,14 +448,15 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         setTimerModeIcon(config.timerMode)
     }
 
-    private fun animateCameraToggle() {
-        ObjectAnimator.ofFloat(binding.toggleCamera, "rotation", 0f, SWITCH_CAMERA_ROTATION_ANGLE)
-            .apply {
-                duration = ANIMATION_DURATION
-                interpolator = FastOutSlowInInterpolator()
-                start()
-            }
-    }
+    private fun animateCameraToggle() = binding.toggleCamera.animate()
+        .rotationBy(SWITCH_CAMERA_ROTATION_ANGLE)
+        .setDuration(ANIMATION_DURATION)
+        .setInterpolator(FastOutSlowInInterpolator())
+        .withEndAction {
+            // settle back onto the angle matching the current device rotation
+            binding.toggleCamera.rotation = rotationToUiDegrees(currentRotation).toFloat()
+        }
+        .start()
 
     private fun selectTimerMode(timerMode: TimerMode) {
         config.timerMode = timerMode
@@ -642,36 +645,6 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             hasPermission(PERMISSION_WRITE_STORAGE) && hasPermission(PERMISSION_CAMERA) && hasPermission(
                 PERMISSION_RECORD_AUDIO
             )
-        }
-    }
-
-    private fun setupOrientationEventListener() {
-        mOrientationEventListener = object : OrientationEventListener(
-            this, SensorManager.SENSOR_DELAY_NORMAL
-        ) {
-            override fun onOrientationChanged(orientation: Int) {
-                if (isDestroyed) {
-                    mOrientationEventListener.disable()
-                    return
-                }
-
-                val currOrient = when (orientation) {
-                    in 75..134 -> ORIENT_LANDSCAPE_RIGHT
-                    in 225..289 -> ORIENT_LANDSCAPE_LEFT
-                    else -> ORIENT_PORTRAIT
-                }
-
-                if (currOrient != mLastHandledOrientation) {
-                    val degrees = when (currOrient) {
-                        ORIENT_LANDSCAPE_LEFT -> 90
-                        ORIENT_LANDSCAPE_RIGHT -> -90
-                        else -> 0
-                    }
-
-                    animateViews(degrees)
-                    mLastHandledOrientation = currOrient
-                }
-            }
         }
     }
 
@@ -1041,11 +1014,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             onSelect.invoke(index, selectedResolution.buttonViewId != clickedViewId)
         }
 
-        val currentDegrees = when (mLastHandledOrientation) {
-            ORIENT_LANDSCAPE_LEFT -> 90
-            ORIENT_LANDSCAPE_RIGHT -> -90
-            else -> 0
-        }
+        val currentDegrees = rotationToUiDegrees(currentRotation)
 
         resolutions.forEach {
             val button = createButton(it, onItemClick)
