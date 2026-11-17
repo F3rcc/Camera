@@ -674,7 +674,6 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     private fun animateViews(degrees: Int) = binding.apply {
         val views = arrayOf(
             toggleCamera,
-            zoomBar,
             layoutTop.toggleTimer,
             layoutTop.toggleFlash,
             layoutTop.changeResolution,
@@ -695,6 +694,11 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         }
         mediaSizeToggleGroup?.children?.forEach { child ->
             rotate(child, degrees)
+        }
+        // the chips are rotated one by one instead of the whole row, the row keeps its size and
+        // only the numbers follow the device orientation
+        zoomChips.forEach { chip ->
+            rotate(chip, degrees)
         }
     }
 
@@ -765,6 +769,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                 text = formatZoomRatio(ratio)
                 textSize = 13f
                 gravity = Gravity.CENTER
+                rotation = rotationToUiDegrees(currentRotation).toFloat()
                 setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding)
                 setTextColor(Color.WHITE)
                 isClickable = true
