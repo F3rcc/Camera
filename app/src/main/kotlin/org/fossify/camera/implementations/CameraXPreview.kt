@@ -632,7 +632,8 @@ class CameraXPreview(
         // the file name is already known before the jpeg exists, let the activity show the rename
         // dialog right away instead of waiting for the capture and the disk write
         if (!isThirdPartyIntent) {
-            val queuedUri = mediaOutput.uri
+            // ImageCaptureOutput does not expose the uri, only the concrete media outputs do
+            val queuedUri = (mediaOutput as? MediaOutput)?.uri
             if (queuedUri != null) {
                 val suggestedName = photoRenamer.getDisplayName(queuedUri)?.substringBeforeLast('.')
                 if (!suggestedName.isNullOrEmpty()) {
