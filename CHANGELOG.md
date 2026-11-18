@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-11-18
+### Added
+- Zoom ratio shortcuts above the mode tabs, up to four presets taken from the real
+  zoom range of the camera, with the ratio remembered per lens and a settings switch
+- The rename dialog opens right after the shutter press: the photo is captured and
+  written in the background while the name is typed, and the next photo can be taken
+  immediately after confirming
+
+### Changed
+- Device rotation is tracked with the AOSP WindowOrientationListener state machine, so
+  the controls no longer flip to portrait when the camera is pointed at a table and
+  photo/video orientation stays consistent in every pose
+
+### Fixed
+- Photo saving is faster: one direct write instead of a temp file plus a copy, the exif
+  block is only rewritten when something really changes, and the output streams are
+  closed properly
+- Shutter animation and shutter sound fire on the press instead of after the jpeg
+- The last taken thumbnail is only decoded once when several photos are taken quickly
+
 ## [1.7.0] - 2026-08-18
 ### Added
 - Multi-location save: save each photo/video to one or more of up to 5 configurable locations
