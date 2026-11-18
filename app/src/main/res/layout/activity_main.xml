@@ -67,7 +67,7 @@
         android:id="@+id/zoom_bar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="108dp"
+        android:layout_marginBottom="25dp"
         android:gravity="center"
         android:orientation="horizontal"
         android:visibility="gone"
