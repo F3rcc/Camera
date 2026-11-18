@@ -89,6 +89,31 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
     private var mOriginalBrightness: Float? = null
     private val photoRenamer by lazy { PhotoRenamer(this) }
 
+    /**
+     * One photo is being captured or written at a time. The rename dialog is shown right after the
+     * shutter press, long before the file exists, so the user decision and the disk write have to
+     * be matched up here instead of blocking the ui.
+     */
+    private class PendingPhoto(
+        val stagingUri: Uri,
+        val suggestedName: String,
+    ) {
+        var dialog: AlertDialog? = null
+        var confirmedName: String? = null
+        var targetLocations: List<Int>? = null
+        var cancelled = false
+        var savedUri: Uri? = null
+        var finalized = false
+    }
+
+    // a shot can still be written while the next one is already being taken, so keep them apart
+    private val pendingPhotos = mutableListOf<PendingPhoto>()
+    private var pendingThumbnailUri: Uri? = null
+    private val thumbnailHandler = Handler(Looper.getMainLooper())
+    private val thumbnailRunnable = Runnable {
+        pendingThumbnailUri?.let { loadLastTakenMedia(it) }
+    }
+
     private val orientationListener = object : OrientationManager.Listener {
         override fun onDeviceRotationChanged(rotation: Int) {
             if (isDestroyed || rotation == currentRotation) {
@@ -182,6 +207,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         OrientationManager.getInstance(this).removeListener(orientationListener)
         zoomSaveHandler.removeCallbacks(saveZoomRunnable)
         persistZoomRatio()
+        thumbnailHandler.removeCallbacks(thumbnailRunnable)
         if (!isAskingPermissions) {
             cancelTimer()
         }
@@ -920,29 +946,115 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                 finish()
             }
 
+            isPhoto -> onPhotoSaved(uri)
             else -> {
-                // show the rename dialog first, the thumbnail is not needed to build it and
-                // decoding a full size photo before it only delays the dialog
+                // videos still show the dialog after the file is complete, they are far too big
+                // to keep the user waiting on a dialog before the recording is written
+                scheduleThumbnailUpdate(uri)
                 if (config.autoRenamePhoto) {
-                    showRenamePhotoDialog(uri, isPhoto)
+                    showRenamePhotoDialog(uri, isPhoto = false)
                 }
-                loadLastTakenMedia(uri)
             }
         }
     }
 
-    private fun showRenamePhotoDialog(uri: Uri, isPhoto: Boolean) {
-        if (isDestroyed || isFinishing) {
+    override fun onPhotoCaptureQueued(uri: Uri, suggestedName: String) {
+        if (!config.autoRenamePhoto || isImageCaptureIntent() || isVideoCaptureIntent()) {
             return
         }
 
-        val currentName = photoRenamer.getDisplayName(uri) ?: return
-        val baseName = currentName.substringBeforeLast('.', currentName)
+        val pending = PendingPhoto(uri, suggestedName)
+        pendingPhotos.add(pending)
+        // let the capture start first, the dialog is allowed to appear a frame later
+        window.decorView.post {
+            if (pendingPhotos.contains(pending) && !isDestroyed) {
+                showRenamePhotoDialog(uri, isPhoto = true, pending = pending)
+            }
+        }
+    }
+
+    override fun onPhotoCaptureFailed() {
+        // only one capture is in flight at a time, so the newest entry is the one that failed
+        val pending = pendingPhotos.lastOrNull() ?: return
+        pending.dialog?.takeIf { it.isShowing }?.dismiss()
+        pendingPhotos.remove(pending)
+    }
+
+    private fun onPhotoSaved(uri: Uri) {
+        scheduleThumbnailUpdate(uri)
+
+        val pending = pendingPhotos.firstOrNull { it.stagingUri == uri }
+        if (pending == null) {
+            // no dialog was opened for this shot, keep the old behaviour
+            if (config.autoRenamePhoto) {
+                showRenamePhotoDialog(uri, isPhoto = true)
+            }
+            return
+        }
+
+        pending.savedUri = uri
+        when {
+            pending.cancelled -> pendingPhotos.remove(pending)
+            pending.confirmedName != null -> enqueuePhotoFinalize(pending)
+            // otherwise the dialog is still open, the confirm click will enqueue it
+        }
+    }
+
+    private fun enqueuePhotoFinalize(pending: PendingPhoto) {
+        if (pending.finalized) {
+            return
+        }
+
+        val savedUri = pending.savedUri ?: return
+        val newName = pending.confirmedName ?: return
+        val targets = pending.targetLocations ?: return
+        pending.finalized = true
+        pendingPhotos.remove(pending)
+
+        // nothing to do when the name did not change and only the staging folder was chosen
+        if (newName == pending.suggestedName && targets == listOf(1)) {
+            return
+        }
+
+        mPreview?.distributeMedia(savedUri, newName, targets, isPhoto = true) { result ->
+            result.failedIndexes.forEach { index ->
+                toast(getString(R.string.location_save_failed, index))
+            }
+            result.savedUris.firstOrNull()?.let { scheduleThumbnailUpdate(it, immediate = true) }
+        }
+    }
+
+    private fun scheduleThumbnailUpdate(uri: Uri, immediate: Boolean = false) {
+        pendingThumbnailUri = uri
+        thumbnailHandler.removeCallbacks(thumbnailRunnable)
+        if (immediate) {
+            thumbnailRunnable.run()
+        } else {
+            thumbnailHandler.postDelayed(thumbnailRunnable, 300)
+        }
+    }
+
+    private fun showRenamePhotoDialog(uri: Uri, isPhoto: Boolean, pending: PendingPhoto? = null) {
+        if (isDestroyed || isFinishing) {
+            if (pending != null) {
+                pendingPhotos.remove(pending)
+            }
+            return
+        }
+
+        // for a shot that is still being written the name is already known, otherwise read it
+        val baseName = pending?.suggestedName ?: run {
+            val currentName = photoRenamer.getDisplayName(uri) ?: return
+            currentName.substringBeforeLast('.', currentName)
+        }
 
         val available = (1..5).filter {
             config.getLocationEnabled(it) && config.getLocationPath(it).isNotEmpty()
         }
         if (available.isEmpty()) {
+            if (pending != null) {
+                pendingPhotos.remove(pending)
+            }
             return
         }
 
@@ -1022,6 +1134,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             .setNegativeButton(org.fossify.commons.R.string.cancel, null)
             .apply {
                 setupDialogStuff(container, this, titleId = titleId) { dialog ->
+                    pending?.dialog = dialog
                     // ask for the keyboard right away so it shows up together with the dialog
                     dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
                     dialog.window?.setBackgroundDrawable(
@@ -1033,17 +1146,38 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                     dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(Color.WHITE)
                     dialog.findViewById<TextView>(org.fossify.commons.R.id.dialog_title_textview)?.setTextColor(Color.WHITE)
 
+                    var handled = false
+
                     fun confirm() {
+                        if (handled) {
+                            return
+                        }
+
                         val newBase = sanitizeFileName(input.text.toString())
                         if (newBase.isEmpty()) {
                             return
                         }
+                        handled = true
                         val targets = selected.toList()
                         if (isPhoto) {
                             config.lastSelectedPhotoLocations = selected
                         } else {
                             config.lastSelectedVideoLocations = selected
                         }
+
+                        if (pending != null) {
+                            // the photo is still being captured or written, remember the decision
+                            // and let the save callback run the rename and the distribution
+                            pending.confirmedName = newBase
+                            pending.targetLocations = targets
+                            pending.dialog = null
+                            dialog.dismiss()
+                            if (pending.savedUri != null) {
+                                enqueuePhotoFinalize(pending)
+                            }
+                            return
+                        }
+
                         dialog.dismiss()
 
                         // 名字没变且只保存到位置1：无需分发
@@ -1065,6 +1199,18 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
                             result.savedUris.firstOrNull()?.let {
                                 mPreviewUri = it
                                 loadLastTakenMedia(it)
+                            }
+                        }
+                    }
+
+                    dialog.setOnDismissListener {
+                        if (!handled && pending != null) {
+                            // cancel button, back press or a tap outside: keep the photo in the
+                            // staging folder under its suggested name
+                            pending.cancelled = true
+                            pending.dialog = null
+                            if (pending.savedUri != null) {
+                                pendingPhotos.remove(pending)
                             }
                         }
                     }

@@ -3,7 +3,8 @@ package org.fossify.camera.helpers
 import android.net.Uri
 import org.fossify.camera.extensions.config
 import org.fossify.commons.activities.BaseSimpleActivity
-import org.fossify.commons.helpers.ensureBackgroundThread
+import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 
 /**
  * Distributes an already-staged media file (saved to 位置1) into the user-selected target
@@ -16,6 +17,15 @@ class MediaDistributor(
 
     private val config = activity.config
     private val photoRenamer = PhotoRenamer(activity)
+
+    // one distribution at a time, photos keep their capture order and never fight over the disk
+    private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "photo-distribute").apply { isDaemon = true }
+    }
+
+    fun shutdown() {
+        executor.shutdown()
+    }
 
     data class DistributionResult(
         val savedUris: List<Uri>,
@@ -30,7 +40,7 @@ class MediaDistributor(
         isPhoto: Boolean,
         onDone: (DistributionResult) -> Unit,
     ) {
-        ensureBackgroundThread {
+        executor.execute {
             val result = doDistribute(sourceUri, newBaseName, targetIndexes, isPhoto)
             activity.runOnUiThread { onDone(result) }
         }

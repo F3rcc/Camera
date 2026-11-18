@@ -17,6 +17,8 @@ interface CameraXPreviewListener {
     fun onChangeFlashMode(flashMode: Int)
     fun onPhotoCaptureStart()
     fun onPhotoCaptureEnd()
+    fun onPhotoCaptureQueued(uri: Uri, suggestedName: String) {}
+    fun onPhotoCaptureFailed() {}
     fun onVideoRecordingStarted()
     fun onVideoRecordingStopped()
     fun onVideoDurationChanged(durationNanos: Long)

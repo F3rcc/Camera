@@ -84,6 +84,7 @@ import org.fossify.camera.helpers.MediaOutputHelper
 import org.fossify.camera.helpers.MediaSizeStore
 import org.fossify.camera.helpers.MediaSoundHelper
 import org.fossify.camera.helpers.OrientationManager
+import org.fossify.camera.helpers.PhotoRenamer
 import org.fossify.camera.helpers.PinchToZoomOnScaleGestureListener
 import org.fossify.camera.helpers.SimpleLocationManager
 import org.fossify.camera.helpers.VideoQualityManager
@@ -95,7 +96,6 @@ import org.fossify.camera.models.ResolutionOption
 import org.fossify.commons.activities.BaseSimpleActivity
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.helpers.PERMISSION_ACCESS_FINE_LOCATION
-import org.fossify.commons.helpers.ensureBackgroundThread
 import kotlin.math.abs
 
 class CameraXPreview(
@@ -126,6 +126,13 @@ class CameraXPreview(
     private val imageQualityManager = ImageQualityManager(activity)
     private val mediaSizeStore = MediaSizeStore(config)
     private val mediaDistributor by lazy { MediaDistributor(activity, mediaOutputHelper) }
+    private val photoRenamer by lazy { PhotoRenamer(activity) }
+
+    // one photo at a time, so at most a single decoded jpeg is alive and the camera buffer is
+    // released as fast as possible
+    private val saveExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "photo-save").apply { isDaemon = true }
+    }
     private val orientationManager by lazy { OrientationManager.getInstance(activity) }
 
     private val orientationListener = object : OrientationManager.Listener {
@@ -477,6 +484,12 @@ class CameraXPreview(
         orientationManager.removeListener(orientationListener)
     }
 
+    override fun onDestroy(owner: LifecycleOwner) {
+        // let the photos that are already being written finish, then release the thread
+        saveExecutor.shutdown()
+        runCatching { mediaDistributor.shutdown() }
+    }
+
     override fun setZoomRatio(ratio: Float) {
         val zoomState = camera?.cameraInfo?.zoomState?.value ?: return
         camera?.cameraControl?.setZoomRatio(
@@ -616,6 +629,18 @@ class CameraXPreview(
         val mediaOutput = mediaOutputHelper.getImageMediaOutput()
         logCaptureDelay("media output ready", pressTime)
 
+        // the file name is already known before the jpeg exists, let the activity show the rename
+        // dialog right away instead of waiting for the capture and the disk write
+        if (!isThirdPartyIntent) {
+            val queuedUri = mediaOutput.uri
+            if (queuedUri != null) {
+                val suggestedName = photoRenamer.getDisplayName(queuedUri)?.substringBeforeLast('.')
+                if (!suggestedName.isNullOrEmpty()) {
+                    listener.onPhotoCaptureQueued(queuedUri, suggestedName)
+                }
+            }
+        }
+
         imageCapture!!.takePicture(mainExecutor, object : OnImageCapturedCallback() {
             override fun onCaptureStarted() {
                 logCaptureDelay("shutter fired", pressTime)
@@ -623,38 +648,47 @@ class CameraXPreview(
 
             override fun onCaptureSuccess(image: ImageProxy) {
                 logCaptureDelay("jpeg ready", pressTime)
-                ensureBackgroundThread {
-                    image.use {
-                        if (mediaOutput is MediaOutput.BitmapOutput) {
-                            val imageBytes = ImageUtil.jpegImageToJpegByteArray(image)
-                            val bitmap = BitmapUtils.makeBitmap(imageBytes)
-                            activity.runOnUiThread {
-                                listener.onPhotoCaptureEnd()
-                                if (bitmap != null) {
-                                    listener.onImageCaptured(bitmap)
-                                } else {
-                                    cameraErrorHandler.handleImageCaptureError(ERROR_CAPTURE_FAILED)
-                                }
-                            }
-                        } else {
-                            ImageSaver.saveImage(
-                                contentResolver = contentResolver,
-                                image = image,
-                                mediaOutput = mediaOutput,
-                                metadata = metadata,
-                                jpegQuality = config.photoQuality,
-                                saveExifAttributes = config.savePhotoMetadata,
-                                onImageSaved = { savedUri ->
-                                    logCaptureDelay("saved", pressTime)
-                                    activity.runOnUiThread {
-                                        listener.onPhotoCaptureEnd()
-                                        listener.onMediaSaved(savedUri, isPhoto = true)
+                if (saveExecutor.isShutdown) {
+                    image.close()
+                    return
+                }
+
+                try {
+                    saveExecutor.execute {
+                        image.use {
+                            if (mediaOutput is MediaOutput.BitmapOutput) {
+                                val imageBytes = ImageUtil.jpegImageToJpegByteArray(image)
+                                val bitmap = BitmapUtils.makeBitmap(imageBytes)
+                                activity.runOnUiThread {
+                                    listener.onPhotoCaptureEnd()
+                                    if (bitmap != null) {
+                                        listener.onImageCaptured(bitmap)
+                                    } else {
+                                        cameraErrorHandler.handleImageCaptureError(ERROR_CAPTURE_FAILED)
                                     }
-                                },
-                                onError = ::handleImageCaptureError
-                            )
+                                }
+                            } else {
+                                ImageSaver.saveImage(
+                                    contentResolver = contentResolver,
+                                    image = image,
+                                    mediaOutput = mediaOutput,
+                                    metadata = metadata,
+                                    jpegQuality = config.photoQuality,
+                                    saveExifAttributes = config.savePhotoMetadata,
+                                    onImageSaved = { savedUri ->
+                                        logCaptureDelay("saved", pressTime)
+                                        activity.runOnUiThread {
+                                            listener.onPhotoCaptureEnd()
+                                            listener.onMediaSaved(savedUri, isPhoto = true)
+                                        }
+                                    },
+                                    onError = ::handleImageCaptureError
+                                )
+                            }
                         }
                     }
+                } catch (e: java.util.concurrent.RejectedExecutionException) {
+                    image.close()
                 }
             }
 
@@ -666,6 +700,7 @@ class CameraXPreview(
 
     private fun handleImageCaptureError(exception: ImageCaptureException) {
         listener.onPhotoCaptureEnd()
+        listener.onPhotoCaptureFailed()
         cameraErrorHandler.handleImageCaptureError(exception.imageCaptureError)
     }
 
