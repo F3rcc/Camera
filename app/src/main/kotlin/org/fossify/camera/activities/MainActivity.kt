@@ -69,7 +69,7 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         private const val TIMER_2_SECONDS = 2001
         private const val SWITCH_CAMERA_ROTATION_ANGLE = 180f
         private const val MAX_ZOOM_PRESETS = 4
-        private const val ZOOM_CHIP_BACKGROUND = 0x40FFFFFF
+        private const val ZOOM_BAR_BACKGROUND = 0x33FFFFFF
         private val RENAME_DIALOG_BACKGROUND_COLOR = 0xFF2A292F.toInt()
     }
 
@@ -760,27 +760,34 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
         }
 
         val density = resources.displayMetrics.density
-        val horizontalPadding = (12 * density).toInt()
-        val verticalPadding = (5 * density).toInt()
-        val chipSpacing = (6 * density).toInt()
+        val chipSize = (44 * density).toInt()
+        val chipSpacing = (2 * density).toInt()
 
-        presets.forEach { ratio ->
+        // one translucent pill behind all the ratios, like the Xiaomi toggle view. The chips are
+        // fixed size boxes so rotating each of them keeps the spacing even in every orientation
+        binding.zoomBar.background = GradientDrawable().apply {
+            cornerRadius = 26 * density
+            setColor(ZOOM_BAR_BACKGROUND)
+        }
+        binding.zoomBar.setPadding(chipSpacing, chipSpacing, chipSpacing, chipSpacing)
+
+        presets.forEachIndexed { index, ratio ->
             val chip = TextView(this).apply {
                 text = formatZoomRatio(ratio)
                 textSize = 13f
                 gravity = Gravity.CENTER
                 rotation = rotationToUiDegrees(currentRotation).toFloat()
-                setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding)
                 setTextColor(Color.WHITE)
                 isClickable = true
                 setOnClickListener { animateZoomTo(ratio) }
             }
             binding.zoomBar.addView(
                 chip,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { marginEnd = chipSpacing }
+                LinearLayout.LayoutParams(chipSize, chipSize).apply {
+                    if (index < presets.lastIndex) {
+                        marginEnd = chipSpacing
+                    }
+                }
             )
             zoomChips.add(chip)
         }
@@ -795,16 +802,15 @@ class MainActivity : SimpleActivity(), PhotoProcessor.MediaSavedListener, Camera
             return
         }
 
-        val density = resources.displayMetrics.density
         val primaryColor = getProperPrimaryColor()
         zoomChips.forEachIndexed { index, chip ->
             val ratio = zoomChipRatios.getOrNull(index) ?: return@forEachIndexed
             val isSelected = abs(ratio - currentRatio) <= max(0.02f, ratio * 0.02f)
             chip.background = GradientDrawable().apply {
-                cornerRadius = 15 * density
-                setColor(if (isSelected) primaryColor else ZOOM_CHIP_BACKGROUND)
+                shape = GradientDrawable.OVAL
+                setColor(if (isSelected) primaryColor else Color.TRANSPARENT)
             }
-            chip.setTextColor(if (isSelected) Color.WHITE else Color.argb(204, 255, 255, 255))
+            chip.setTextColor(if (isSelected) Color.WHITE else Color.argb(230, 255, 255, 255))
         }
     }
 
